@@ -19,9 +19,12 @@ class TransformerViewModel(application: Application) : AndroidViewModel(applicat
 
     val transformer: StateFlow<Transformer?> = _transformerId
         .flatMapLatest { id ->
-            if (id == -1L) flowOf(null)
-            else flow {
-                emit(db.transformerDao().getById(id))
+            if (id == -1L) {
+                flowOf(null)
+            } else {
+                flow<Transformer?> {
+                    emit(db.transformerDao().getById(id))
+                }
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
