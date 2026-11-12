@@ -7,7 +7,12 @@ import com.bazdid.trans.data.db.AppDatabase
 import com.bazdid.trans.data.entity.SchematicConnection
 import com.bazdid.trans.data.entity.SchematicNode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -83,8 +88,9 @@ class SchematicViewModel(application: Application) : AndroidViewModel(applicatio
             schematicDao.deleteConnectionsByTransformer(id)
             schematicDao.deleteNodesByTransformer(id)
         }
+    }
 
-    fun updateNodePositions(updatedNodes: List<com.bazdid.trans.data.entity.SchematicNode>) {
+    fun updateNodePositions(updatedNodes: List<SchematicNode>) {
         viewModelScope.launch {
             updatedNodes.forEach { node ->
                 schematicDao.updateNode(node)
@@ -92,7 +98,7 @@ class SchematicViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun updateNodePhases(node: com.bazdid.trans.data.entity.SchematicNode, single: Int, three: Int) {
+    fun updateNodePhases(node: SchematicNode, single: Int, three: Int) {
         viewModelScope.launch {
             schematicDao.updateNode(
                 node.copy(
@@ -103,5 +109,4 @@ class SchematicViewModel(application: Application) : AndroidViewModel(applicatio
             )
         }
     }
-
 }
