@@ -120,4 +120,36 @@ class SchematicActivity : AppCompatActivity() {
             }
         }
     }
+
+    private fun showPhaseDialog(node: com.bazdid.trans.data.entity.SchematicNode) {
+        val inputSingle = android.widget.EditText(this).apply {
+            hint = "تعداد تک‌فاز"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText(node.singlePhaseCount.toString())
+        }
+        val inputThree = android.widget.EditText(this).apply {
+            hint = "تعداد سه‌فاز"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText(node.threePhaseCount.toString())
+        }
+        val layout = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 8)
+            addView(inputSingle)
+            addView(inputThree)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(if (node.nodeType == "pole") "ثبت انشعاب روی پایه" else "ثبت انشعاب خروجی")
+            .setView(layout)
+            .setPositiveButton("ذخیره") { _, _ ->
+                val single = inputSingle.text.toString().toIntOrNull() ?: 0
+                val three = inputThree.text.toString().toIntOrNull() ?: 0
+                viewModel.updateNodePhases(node, single, three)
+                Toast.makeText(this, "ذخیره شد", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("انصراف", null)
+            .show()
+    }
+
 }
