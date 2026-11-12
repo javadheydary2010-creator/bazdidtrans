@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.bazdid.trans.data.db.AppDatabase
 import com.bazdid.trans.data.entity.Pole
+import com.bazdid.trans.data.entity.PowerLine
 import com.bazdid.trans.data.entity.Transformer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,11 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
     val transformers = _projectId.flatMapLatest { id ->
         if (id == -1L) flowOf(emptyList())
         else db.transformerDao().getTransformersByProject(id)
+    }
+
+    val lines = _projectId.flatMapLatest { id ->
+        if (id == -1L) flowOf(emptyList())
+        else db.powerLineDao().getLinesByProject(id)
     }
 
     fun loadProject(projectId: Long) {
@@ -57,13 +63,31 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 feederCount = 1
             )
             val id = db.transformerDao().insert(tr)
-            // Automatically create one default feeder
             db.feederDao().insert(
                 com.bazdid.trans.data.entity.Feeder(
                     transformerId = id,
                     name = "فیدر ۱",
                     singlePhaseCount = 0,
                     threePhaseCount = 0
+                )
+            )
+        }
+    }
+
+    fun addLine(
+        projectId: Long,
+        fromType: String, fromId: Long,
+        toType: String, toId: Long
+    ) {
+        viewModelScope.launch {
+            db.powerLineDao().insert(
+                PowerLine(
+                    projectId = projectId,
+                    fromType = fromType,
+                    fromId = fromId,
+                    toType = toType,
+                    toId = toId,
+                    lineType = "LV"
                 )
             )
         }
