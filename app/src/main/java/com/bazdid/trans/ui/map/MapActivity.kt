@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
@@ -232,7 +233,7 @@ class MapActivity : AppCompatActivity() {
                     title = pole.name.ifEmpty { "پایه #${pole.id}" }
                     snippet = "پایه برق"
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                    poleIcon?.let { icon = it }
+                    poleIcon?.let { icon = BitmapDrawable(resources, it) }
                     relatedObject = pole
                     setOnMarkerClickListener { m, _ ->
                         onPoleOrTransformerClicked("pole", (m.relatedObject as Pole).id, m.position)
@@ -262,7 +263,7 @@ class MapActivity : AppCompatActivity() {
                     title = tr.name.ifEmpty { "ترانس #${tr.id}" }
                     snippet = "کلیک برای جزئیات / اتصال خط"
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                    transformerIcon?.let { icon = it }
+                    transformerIcon?.let { icon = BitmapDrawable(resources, it) }
                     relatedObject = tr
                     setOnMarkerClickListener { m, _ ->
                         val t = m.relatedObject as Transformer
