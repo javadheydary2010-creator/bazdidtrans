@@ -1,5 +1,0 @@
-Add Gradle Wrapper (gradle/ folder + gradlew scripts)
-
-- gradle/wrapper/gradle-wrapper.jar
-- gradle/wrapper/gradle-wrapper.properties (Gradle 8.2)
-- gradlew and gradlew.bat
