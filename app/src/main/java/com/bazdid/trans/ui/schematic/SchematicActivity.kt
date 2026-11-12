@@ -70,6 +70,12 @@ class SchematicActivity : AppCompatActivity() {
         binding.schematicView.onNodesRepositioned = { updatedNodes ->
             viewModel.updateNodePositions(updatedNodes)
         }
+        binding.schematicView.onNodeSelected = { node ->
+            if (node.nodeType == "pole" || node.nodeType == "output") {
+                showPhaseDialog(node)
+            }
+        }
+
     }
 
     private fun setupButtons() {

@@ -61,6 +61,7 @@ class SchematicView @JvmOverloads constructor(
     var onNodeAdded: ((Float, Float, String) -> Unit)? = null
     var onConnectionRequested: ((Long, Long) -> Unit)? = null
     var onNodesRepositioned: ((List<SchematicNode>) -> Unit)? = null
+    var onNodeSelected: ((SchematicNode) -> Unit)? = null
 
     enum class Mode { NONE, ADD_POLE, ADD_OUTPUT, CONNECT }
 
@@ -206,7 +207,9 @@ class SchematicView @JvmOverloads constructor(
                 }
             }
             Mode.NONE -> {
-                selectedNodeId = findNodeAt(x, y)?.id
+                val tapped = findNodeAt(x, y)
+                selectedNodeId = tapped?.id
+                tapped?.let { onNodeSelected?.invoke(it) }
                 invalidate()
             }
         }
