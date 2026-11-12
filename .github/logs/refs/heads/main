@@ -1,5 +1,0 @@
-0000000000000000000000000000000000000000 697000ff32183b1197972ad760e2d974557bbed8 BazdidTrans <bazdidtrans@users.noreply.github.com> 1794299598 +0000	commit (initial): Initial commit: BazdidTrans offline power distribution field app
-697000ff32183b1197972ad760e2d974557bbed8 e6b8f7d5d00673ee8f4f4fd170e44116ccaef8b9 BazdidTrans <bazdidtrans@users.noreply.github.com> 1794423065 +0000	commit: Add auto-layout + zoom/pan for schematic, fix load units to kW with dual display
-e6b8f7d5d00673ee8f4f4fd170e44116ccaef8b9 58fdcab0098432c26c584f554d1a6c09d6c8e1a1 BazdidTrans <bazdidtrans@users.noreply.github.com> 1794423144 +0000	commit: Add offline MBTiles map for Mehran / Bandar Khamir area (1.5 MB)
-58fdcab0098432c26c584f554d1a6c09d6c8e1a1 1b9e07bfb4730041a5f0f0577248c7fb6ff9dc48 BazdidTrans <bazdidtrans@users.noreply.github.com> 1794423170 +0000	commit: Document offline MBTiles map in README
-1b9e07bfb4730041a5f0f0577248c7fb6ff9dc48 d117c17f1c989adcac0d977b5f08bda826396a5e BazdidTrans <bazdidtrans@users.noreply.github.com> 1794425286 +0000	commit: Add Gradle Wrapper (gradle/ folder + gradlew scripts)
