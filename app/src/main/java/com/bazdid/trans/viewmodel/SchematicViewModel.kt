@@ -83,6 +83,7 @@ class SchematicViewModel(application: Application) : AndroidViewModel(applicatio
             schematicDao.deleteConnectionsByTransformer(id)
             schematicDao.deleteNodesByTransformer(id)
         }
+    }
 
     fun updateNodePositions(updatedNodes: List<com.bazdid.trans.data.entity.SchematicNode>) {
         viewModelScope.launch {
