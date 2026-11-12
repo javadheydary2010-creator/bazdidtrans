@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">بازدید ترانس</string>
+
+    <!-- Project List -->
+    <string name="projects_title">پروژه‌های بازدید</string>
+    <string name="new_project">پروژه جدید</string>
+    <string name="no_projects">هنوز پروژه‌ای ثبت نشده است</string>
+    <string name="project_name_hint">نام پروژه / محل بازدید</string>
+    <string name="project_desc_hint">توضیحات (اختیاری)</string>
+    <string name="create">ایجاد</string>
+    <string name="cancel">انصراف</string>
+    <string name="delete">حذف</string>
+    <string name="edit">ویرایش</string>
+    <string name="open">باز کردن</string>
+
+    <!-- Map -->
+    <string name="map_title">نقشه شبکه</string>
+    <string name="add_pole">افزودن پایه</string>
+    <string name="add_transformer">افزودن ترانس</string>
+    <string name="add_line">کشیدن خط</string>
+    <string name="my_location">موقعیت من</string>
+    <string name="pole">پایه</string>
+    <string name="transformer">ترانس</string>
+    <string name="line">خط</string>
+    <string name="save">ذخیره</string>
+    <string name="delete_object">حذف شیء</string>
+
+    <!-- Transformer Detail -->
+    <string name="transformer_detail">جزئیات ترانس</string>
+    <string name="transformer_name">نام / کد ترانس</string>
+    <string name="capacity_kva">ظرفیت ترانس (kVA)</string>
+    <string name="feeder_count">تعداد فیدر</string>
+    <string name="feeders">فیدرها</string>
+    <string name="single_phase">تک‌فاز</string>
+    <string name="three_phase">سه‌فاز</string>
+    <string name="total_load">بار کل</string>
+    <string name="load_percentage">درصد بارگیری</string>
+    <string name="add_feeder">افزودن فیدر</string>
+    <string name="schematic">نقشه فشار ضعیف</string>
+    <string name="note">یادداشت</string>
+    <string name="kw">کیلووات</string>
+
+    <!-- Schematic -->
+    <string name="schematic_title">نقشه دو‌بعدی فشار ضعیف</string>
+    <string name="add_node_pole">پایه</string>
+    <string name="add_node_output">خروجی</string>
+    <string name="connect">اتصال</string>
+    <string name="clear_schematic">پاک کردن نقشه</string>
+
+    <!-- Common -->
+    <string name="ok">تأیید</string>
+    <string name="yes">بله</string>
+    <string name="no">خیر</string>
+    <string name="confirm_delete">آیا از حذف مطمئن هستید؟</string>
+    <string name="location_permission_needed">برای ثبت موقعیت دقیق، دسترسی به مکان لازم است</string>
+</resources>
