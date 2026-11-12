@@ -83,7 +83,6 @@ class SchematicViewModel(application: Application) : AndroidViewModel(applicatio
             schematicDao.deleteConnectionsByTransformer(id)
             schematicDao.deleteNodesByTransformer(id)
         }
-    }
 
     fun updateNodePositions(updatedNodes: List<com.bazdid.trans.data.entity.SchematicNode>) {
         viewModelScope.launch {
@@ -92,4 +91,17 @@ class SchematicViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
     }
+
+    fun updateNodePhases(node: com.bazdid.trans.data.entity.SchematicNode, single: Int, three: Int) {
+        viewModelScope.launch {
+            schematicDao.updateNode(
+                node.copy(
+                    singlePhaseCount = single.coerceAtLeast(0),
+                    threePhaseCount = three.coerceAtLeast(0),
+                    isThreePhase = three > 0
+                )
+            )
+        }
+    }
+
 }
