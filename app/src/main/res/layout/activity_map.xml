@@ -26,7 +26,6 @@
 
     </com.google.android.material.appbar.AppBarLayout>
 
-    <!-- Bottom action bar -->
     <LinearLayout
         android:id="@+id/bottomBar"
         android:layout_width="match_parent"
@@ -34,50 +33,58 @@
         android:layout_gravity="bottom"
         android:background="#EEFFFFFF"
         android:elevation="8dp"
-        android:orientation="horizontal"
-        android:padding="8dp"
-        android:gravity="center">
+        android:orientation="vertical"
+        android:padding="6dp">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnAddPole"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_margin="4dp"
-            android:text="@string/add_pole"
-            android:textSize="12sp"
-            app:icon="@android:drawable/ic_menu_add"
-            app:iconGravity="textStart" />
+            android:orientation="horizontal"
+            android:gravity="center">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnAddTransformer"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_margin="4dp"
-            android:text="@string/add_transformer"
-            android:textSize="12sp"
-            app:icon="@android:drawable/ic_menu_add"
-            app:iconGravity="textStart" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnAddPole"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_margin="3dp"
+                android:text="@string/add_pole"
+                android:textSize="11sp" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnMyLocation"
-            style="@style/Widget.MaterialComponents.Button"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_margin="4dp"
-            android:text="@string/my_location"
-            android:textSize="12sp"
-            app:backgroundTint="@color/primary"
-            app:icon="@android:drawable/ic_menu_mylocation"
-            app:iconGravity="textStart" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnAddTransformer"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_margin="3dp"
+                android:text="@string/add_transformer"
+                android:textSize="11sp" />
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnAddLine"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_margin="3dp"
+                android:text="@string/add_line"
+                android:textSize="11sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnMyLocation"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_margin="3dp"
+                android:text="@string/my_location"
+                android:textSize="11sp"
+                app:backgroundTint="@color/primary" />
+        </LinearLayout>
     </LinearLayout>
 
-    <!-- Mode indicator -->
     <TextView
         android:id="@+id/tvMode"
         android:layout_width="wrap_content"
