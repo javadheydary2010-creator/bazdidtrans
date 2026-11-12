@@ -3,6 +3,8 @@ package com.bazdid.trans.ui.map
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
@@ -16,6 +18,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
 import com.bazdid.trans.R
 import com.bazdid.trans.data.entity.Pole
+import com.bazdid.trans.data.entity.PowerLine
 import com.bazdid.trans.data.entity.Transformer
 import com.bazdid.trans.databinding.ActivityMapBinding
 import com.bazdid.trans.ui.transformer.TransformerDetailActivity
@@ -28,6 +31,7 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 
@@ -36,6 +40,18 @@ class MapActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_PROJECT_ID = "project_id"
         const val EXTRA_PROJECT_NAME = "project_name"
+
+        // رنگ‌های مختلف برای فیدرها
+        val FEEDER_COLORS = listOf(
+            Color.parseColor("#1565C0"),
+            Color.parseColor("#2E7D32"),
+            Color.parseColor("#E65100"),
+            Color.parseColor("#6A1B9A"),
+            Color.parseColor("#00838F"),
+            Color.parseColor("#C62828"),
+            Color.parseColor("#F9A825"),
+            Color.parseColor("#4527A0")
+        )
     }
 
     private lateinit var binding: ActivityMapBinding
@@ -48,6 +64,14 @@ class MapActivity : AppCompatActivity() {
 
     private val poleMarkers = mutableMapOf<Long, Marker>()
     private val transformerMarkers = mutableMapOf<Long, Marker>()
+    private val lineOverlays = mutableListOf<Polyline>()
+
+    // برای حالت کشیدن خط
+    private var lineStartType: String? = null  // "pole" or "transformer"
+    private var lineStartId: Long? = null
+
+    private var poleIcon: Bitmap? = null
+    private var transformerIcon: Bitmap? = null
 
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -59,12 +83,11 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
-    enum class AddMode { NONE, POLE, TRANSFORMER }
+    enum class AddMode { NONE, POLE, TRANSFORMER, LINE }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // OsmDroid config
         Configuration.getInstance().load(this, PreferenceManager.getDefaultSharedPreferences(this))
 
         binding = ActivityMapBinding.inflate(layoutInflater)
@@ -77,6 +100,10 @@ class MapActivity : AppCompatActivity() {
             finish()
             return
         }
+
+        // بارگذاری آیکون‌های سفارشی
+        poleIcon = BitmapFactory.decodeResource(resources, R.drawable.ic_pole)
+        transformerIcon = BitmapFactory.decodeResource(resources, R.drawable.ic_transformer)
 
         setupToolbar()
         setupMap()
@@ -101,12 +128,9 @@ class MapActivity : AppCompatActivity() {
             setTileSource(TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
             controller.setZoom(16.0)
-
-            // Default center (Iran - can be changed)
-            controller.setCenter(GeoPoint(35.6892, 51.3890))
+            controller.setCenter(GeoPoint(26.95, 54.80)) // نزدیک بندرلنگه / مهران
         }
 
-        // Tap listener for adding objects
         val mapEventsOverlay = MapEventsOverlay(object : MapEventsReceiver {
             override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
                 p ?: return false
@@ -121,7 +145,10 @@ class MapActivity : AppCompatActivity() {
                         setAddMode(AddMode.NONE)
                         Toast.makeText(this@MapActivity, "ترانس اضافه شد", Toast.LENGTH_SHORT).show()
                     }
-                    AddMode.NONE -> { /* do nothing */ }
+                    AddMode.LINE -> {
+                        // در حالت خط، کلیک روی نقشه کاری نمی‌کند؛ باید روی مارکر کلیک شود
+                    }
+                    AddMode.NONE -> { }
                 }
                 return true
             }
@@ -138,6 +165,11 @@ class MapActivity : AppCompatActivity() {
         binding.btnAddTransformer.setOnClickListener {
             setAddMode(if (addMode == AddMode.TRANSFORMER) AddMode.NONE else AddMode.TRANSFORMER)
         }
+        binding.btnAddLine.setOnClickListener {
+            setAddMode(if (addMode == AddMode.LINE) AddMode.NONE else AddMode.LINE)
+            lineStartType = null
+            lineStartId = null
+        }
         binding.btnMyLocation.setOnClickListener {
             myLocationOverlay?.myLocation?.let {
                 binding.mapView.controller.animateTo(it)
@@ -147,23 +179,23 @@ class MapActivity : AppCompatActivity() {
 
     private fun setAddMode(mode: AddMode) {
         addMode = mode
+        lineStartType = null
+        lineStartId = null
         when (mode) {
             AddMode.POLE -> {
                 binding.tvMode.visibility = View.VISIBLE
                 binding.tvMode.text = "روی نقشه ضربه بزنید تا پایه اضافه شود"
-                binding.btnAddPole.setBackgroundColor(ContextCompat.getColor(this, R.color.pole_color))
-                binding.btnAddTransformer.setBackgroundColor(Color.TRANSPARENT)
             }
             AddMode.TRANSFORMER -> {
                 binding.tvMode.visibility = View.VISIBLE
                 binding.tvMode.text = "روی نقشه ضربه بزنید تا ترانس اضافه شود"
-                binding.btnAddTransformer.setBackgroundColor(ContextCompat.getColor(this, R.color.transformer_color))
-                binding.btnAddPole.setBackgroundColor(Color.TRANSPARENT)
+            }
+            AddMode.LINE -> {
+                binding.tvMode.visibility = View.VISIBLE
+                binding.tvMode.text = "اول روی یک پایه یا ترانس، بعد روی نقطه دوم بزنید"
             }
             AddMode.NONE -> {
                 binding.tvMode.visibility = View.GONE
-                binding.btnAddPole.setBackgroundColor(Color.TRANSPARENT)
-                binding.btnAddTransformer.setBackgroundColor(Color.TRANSPARENT)
             }
         }
     }
@@ -179,10 +211,14 @@ class MapActivity : AppCompatActivity() {
                 updateTransformerMarkers(transformers)
             }
         }
+        lifecycleScope.launch {
+            viewModel.lines.collectLatest { lines ->
+                updateLines(lines)
+            }
+        }
     }
 
     private fun updatePoleMarkers(poles: List<Pole>) {
-        // Remove old markers that no longer exist
         val currentIds = poles.map { it.id }.toSet()
         poleMarkers.keys.filter { it !in currentIds }.forEach { id ->
             binding.mapView.overlays.remove(poleMarkers.remove(id))
@@ -196,11 +232,10 @@ class MapActivity : AppCompatActivity() {
                     title = pole.name.ifEmpty { "پایه #${pole.id}" }
                     snippet = "پایه برق"
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                    icon = ContextCompat.getDrawable(this@MapActivity, android.R.drawable.ic_menu_compass)
-                    // Simple color via relatedObject or just use default
+                    poleIcon?.let { icon = it }
                     relatedObject = pole
                     setOnMarkerClickListener { m, _ ->
-                        showPoleOptions(m.relatedObject as Pole)
+                        onPoleOrTransformerClicked("pole", (m.relatedObject as Pole).id, m.position)
                         true
                     }
                 }
@@ -225,18 +260,23 @@ class MapActivity : AppCompatActivity() {
                 val marker = Marker(binding.mapView).apply {
                     position = GeoPoint(tr.latitude, tr.longitude)
                     title = tr.name.ifEmpty { "ترانس #${tr.id}" }
-                    snippet = "کلیک برای جزئیات"
+                    snippet = "کلیک برای جزئیات / اتصال خط"
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                    transformerIcon?.let { icon = it }
                     relatedObject = tr
                     setOnMarkerClickListener { m, _ ->
-                        openTransformerDetail(m.relatedObject as Transformer)
+                        val t = m.relatedObject as Transformer
+                        if (addMode == AddMode.LINE) {
+                            onPoleOrTransformerClicked("transformer", t.id, m.position)
+                        } else {
+                            openTransformerDetail(t)
+                        }
                         true
                     }
                 }
                 binding.mapView.overlays.add(marker)
                 transformerMarkers[tr.id] = marker
 
-                // Center map on first transformer if no location yet
                 if (transformerMarkers.size == 1 && myLocationOverlay?.myLocation == null) {
                     binding.mapView.controller.animateTo(marker.position)
                 }
@@ -246,6 +286,68 @@ class MapActivity : AppCompatActivity() {
             }
         }
         binding.mapView.invalidate()
+    }
+
+    private fun updateLines(lines: List<PowerLine>) {
+        // حذف خطوط قبلی
+        lineOverlays.forEach { binding.mapView.overlays.remove(it) }
+        lineOverlays.clear()
+
+        lines.forEachIndexed { index, line ->
+            val fromPos = getPosition(line.fromType, line.fromId)
+            val toPos = getPosition(line.toType, line.toId)
+            if (fromPos != null && toPos != null) {
+                val color = FEEDER_COLORS[index % FEEDER_COLORS.size]
+                val poly = Polyline(binding.mapView).apply {
+                    setPoints(listOf(fromPos, toPos))
+                    outlinePaint.color = color
+                    outlinePaint.strokeWidth = 8f
+                }
+                binding.mapView.overlays.add(poly)
+                lineOverlays.add(poly)
+            }
+        }
+        binding.mapView.invalidate()
+    }
+
+    private fun getPosition(type: String, id: Long): GeoPoint? {
+        return when (type) {
+            "pole" -> poleMarkers[id]?.position
+            "transformer" -> transformerMarkers[id]?.position
+            else -> null
+        }
+    }
+
+    private fun onPoleOrTransformerClicked(type: String, id: Long, position: GeoPoint) {
+        if (addMode != AddMode.LINE) {
+            if (type == "pole") {
+                val pole = poleMarkers[id]?.relatedObject as? Pole
+                pole?.let { showPoleOptions(it) }
+            }
+            return
+        }
+
+        // حالت کشیدن خط
+        if (lineStartType == null || lineStartId == null) {
+            lineStartType = type
+            lineStartId = id
+            binding.tvMode.text = "حالا نقطه دوم (پایه یا ترانس) را انتخاب کنید"
+            Toast.makeText(this, "نقطه اول انتخاب شد", Toast.LENGTH_SHORT).show()
+        } else {
+            if (lineStartType == type && lineStartId == id) {
+                Toast.makeText(this, "نقطه تکراری است", Toast.LENGTH_SHORT).show()
+                return
+            }
+            viewModel.addLine(
+                projectId,
+                lineStartType!!, lineStartId!!,
+                type, id
+            )
+            Toast.makeText(this, "خط اضافه شد", Toast.LENGTH_SHORT).show()
+            lineStartType = null
+            lineStartId = null
+            binding.tvMode.text = "اول روی یک پایه یا ترانس، بعد روی نقطه دوم بزنید"
+        }
     }
 
     private fun showPoleOptions(pole: Pole) {
@@ -286,7 +388,12 @@ class MapActivity : AppCompatActivity() {
     private fun enableMyLocation() {
         myLocationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(this), binding.mapView).apply {
             enableMyLocation()
-            enableFollowLocation()
+            // نشانگر موقعیت سیاه
+            try {
+                val blackIcon = BitmapFactory.decodeResource(resources, R.drawable.ic_my_location_black)
+                setPersonIcon(blackIcon)
+                setDirectionIcon(blackIcon)
+            } catch (_: Exception) { }
         }
         binding.mapView.overlays.add(myLocationOverlay)
 
