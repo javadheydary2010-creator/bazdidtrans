@@ -33,15 +33,11 @@ jobs:
       - name: Fix gradlew
         run: |
           chmod +x ./gradlew
-          # حذف کاراکترهای ویندوزی اگر وجود داشته باشد
-          sed -i 's/\r$//' ./gradlew || true
-          # مطمئن شدن از وجود فایل‌های wrapper
-          ls -la gradle/wrapper/
+          # رفع مشکل DEFAULT_JVM_OPTS
+          sed -i 's/DEFAULT_JVM_OPTS=.*/DEFAULT_JVM_OPTS="-Xmx2g"/' ./gradlew
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace --no-daemon
-        env:
-          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx2g"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
