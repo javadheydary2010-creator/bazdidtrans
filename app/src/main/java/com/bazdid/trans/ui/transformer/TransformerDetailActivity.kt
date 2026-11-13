@@ -2,8 +2,8 @@ package com.bazdid.trans.ui.transformer
 
 import android.content.Intent
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -39,34 +39,28 @@ class TransformerDetailActivity : AppCompatActivity() {
             val totalThree = data?.getIntExtra(SchematicActivity.RESULT_THREE, 0) ?: 0
             val loadKw = data?.getFloatExtra(SchematicActivity.RESULT_KW, 0f) ?: 0f
 
+            // اعمال محاسبات فیدر و خلاصه بار
             if (totalSingle > 0 || totalThree > 0) {
                 viewModel.applySchematicTotals(totalSingle, totalThree)
             }
 
+            // به‌روزرسانی یادداشت (بدون ریز پایه)
             if (designSummary.isNotEmpty()) {
                 val current = binding.etNote.text?.toString().orEmpty()
                 val cleaned = current
                     .lines()
-                    .filterNot {
-                        it.startsWith("===") ||
-                        it.startsWith("تعداد پایه") ||
-                        it.startsWith("تک‌فاز") ||
-                        it.startsWith("بار تقریبی") ||
-                        it.startsWith("طول کل") ||
-                        it.startsWith("---")
-                    }
+                    .filterNot { it.startsWith("===") || it.startsWith("تعداد پایه") || it.startsWith("تک‌فاز") || it.startsWith("بار تقریبی") || it.startsWith("طول کل") || it.startsWith("---") }
                     .joinToString("\n")
                     .trim()
                 binding.etNote.setText((cleaned + "\n\n" + designSummary).trim())
             }
 
+            // ذخیره خودکار یادداشت و اطلاعات
             saveTransformer()
 
-            val metersText = "%.0f".format(totalNetworkMeters)
-            val kwText = "%.1f".format(loadKw)
             Toast.makeText(
                 this,
-                "محاسبات اعمال شد — طول: $metersText م | بار: $kwText kW",
+                "محاسبات اعمال شد — طول: ${"%.0f".format(totalNetworkMeters)} م | بار: ${"%.1f".format(loadKw)} kW",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -126,10 +120,7 @@ class TransformerDetailActivity : AppCompatActivity() {
             viewModel.addFeeder()
         }
 
-        binding.btnExport.setOnClickListener {
-            exportReport()
-        }
-
+        binding.btnExport.setOnClickListener { exportReport() }
         binding.btnSave.setOnClickListener {
             saveTransformer()
         }
@@ -207,13 +198,11 @@ class TransformerDetailActivity : AppCompatActivity() {
         feeders.forEach { f ->
             val kw = f.singlePhaseCount * 6.0 + f.threePhaseCount * 8.0
             totalKw += kw
-            sb.appendLine("\( {f.name}: تک‌فاز= \){f.singlePhaseCount} | سه‌فاز=${f.threePhaseCount} | ${kw} kW")
+            sb.appendLine("${f.name}: تک‌فاز=${f.singlePhaseCount} | سه‌فاز=${f.threePhaseCount} | ${kw} kW")
         }
-        val totalKvaApprox = "%.1f".format(totalKw / 0.9)
-        sb.appendLine("جمع بار فیدرها: $totalKw kW ≈ $totalKvaApprox kVA")
+        sb.appendLine("جمع بار فیدرها: $totalKw kW (≈ ${"%.1f".format(totalKw / 0.9)} kVA)")
         if (totalNetworkMeters > 0) {
-            val metersFormatted = "%.1f".format(totalNetworkMeters)
-            sb.appendLine("طول کل شبکه فشار ضعیف: $metersFormatted متر")
+            sb.appendLine("طول کل شبکه فشار ضعیف: ${"%.1f".format(totalNetworkMeters)} متر")
         }
         if (designSummary.isNotEmpty()) {
             sb.appendLine()
@@ -221,23 +210,9 @@ class TransformerDetailActivity : AppCompatActivity() {
         }
         sb.appendLine("==========================================")
 
-        val geo = buildString {
-            append("{\"type\":\"Feature\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[")
-            append(tr.longitude)
-            append(",")
-            append(tr.latitude)
-            append("]},\"properties\":{\"name\":\"")
-            append(tr.name)
-            append("\",\"capacity_kva\":")
-            append(tr.capacityKva)
-            append(",\"load_kw\":")
-            append(totalKw)
-            append(",\"network_m\":")
-            append(totalNetworkMeters)
-            append("}}")
-        }
+        val geo = """{"type":"Feature","geometry":{"type":"Point","coordinates":[${tr.longitude},${tr.latitude}]},"properties":{"name":"${tr.name}","capacity_kva":${tr.capacityKva},"load_kw":$totalKw,"network_m":$totalNetworkMeters}}"""
 
-        val options = arrayOf("گزارش پرینت - متن", "خروجی GIS - GeoJSON")
+        val options = arrayOf("گزارش پرینت (متن)", "خروجی GIS (GeoJSON)")
         AlertDialog.Builder(this)
             .setTitle("نوع خروجی")
             .setItems(options) { _, which ->
