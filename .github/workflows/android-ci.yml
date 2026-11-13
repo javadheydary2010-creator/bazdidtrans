@@ -30,11 +30,8 @@ jobs:
       - name: Accept licenses
         run: yes | sdkmanager --licenses > /dev/null || true
 
-      - name: Fix gradlew
-        run: |
-          chmod +x ./gradlew
-          # رفع مشکل DEFAULT_JVM_OPTS
-          sed -i 's/DEFAULT_JVM_OPTS=.*/DEFAULT_JVM_OPTS="-Xmx2g"/' ./gradlew
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace --no-daemon
