@@ -1,5 +1,7 @@
 package com.bazdid.trans.ui.schematic
 
+import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.text.InputType
 import android.widget.EditText
@@ -15,25 +17,21 @@ import com.bazdid.trans.databinding.ActivitySchematicBinding
 import com.bazdid.trans.viewmodel.SchematicViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlin.math.hypot
 
-/**
- * طراحی شبکه فشار ضعیف:
- * - شروع فیدر از ترانس
- * - با هر پایه، خط خودکار به تجهیز قبلی وصل می‌شود
- * - بلافاصله دیالوگ تعداد تک‌فاز/سه‌فاز باز می‌شود
- * - امکان جابجایی و ویرایش
- */
 class SchematicActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_TRANSFORMER_ID = "transformer_id"
+        /** متر به ازای هر واحد مختصات Canvas (قابل تنظیم) */
+        const val METERS_PER_UNIT = 2.5f
+        const val RESULT_LENGTHS = "result_lengths_summary"
+        const val RESULT_TOTAL_M = "result_total_meters"
     }
 
     private lateinit var binding: ActivitySchematicBinding
     private val viewModel: SchematicViewModel by viewModels()
     private var transformerId: Long = -1
-
-    /** آخرین گره فعال برای اتصال خودکار خط */
     private var lastActiveNodeId: Long? = null
     private var feederMode = false
 
@@ -65,13 +63,11 @@ class SchematicActivity : AppCompatActivity() {
     }
 
     private fun setupView() {
-        // وقتی پایه جدید اضافه شد
         binding.schematicView.onNodeAdded = { x, y, type ->
             if (type == "pole" && feederMode) {
-                // افزودن پایه و اتصال خودکار
                 viewModel.addNodeAndConnect(x, y, "pole", lastActiveNodeId) { newNode ->
                     lastActiveNodeId = newNode.id
-                    showPhaseDialog(newNode)
+                    showPhaseDialog(newNode, isNew = true)
                 }
             } else {
                 viewModel.addNode(x, y, type, isThreePhase = false)
@@ -88,53 +84,65 @@ class SchematicActivity : AppCompatActivity() {
         }
 
         binding.schematicView.onNodeSelected = { node ->
-            if (node.nodeType == "pole" || node.nodeType == "output") {
-                showPhaseDialog(node)
-            }
+            showNodeOptions(node)
         }
     }
 
     private fun setupButtons() {
-        // دکمه پایه = شروع/ادامه فیدر
         binding.btnAddPole.setOnClickListener {
             feederMode = true
-            // اگر هنوز گرهی نیست، ترانس را به عنوان مرکز در نظر بگیر
             if (lastActiveNodeId == null) {
                 val nodes = viewModel.nodes.value
                 val transformerNode = nodes.find { it.nodeType == "transformer" }
                 if (transformerNode == null) {
-                    // یک گره ترانس در مرکز بساز
                     viewModel.addTransformerNode { node ->
                         lastActiveNodeId = node.id
                         binding.schematicView.setMode(SchematicView.Mode.ADD_POLE)
-                        Toast.makeText(this, "فیدر شروع شد — پایه بعدی را روی نقشه بزنید", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, "فیدر شروع شد — پایه را روی صفحه بزنید", Toast.LENGTH_LONG).show()
                     }
                 } else {
                     lastActiveNodeId = transformerNode.id
                     binding.schematicView.setMode(SchematicView.Mode.ADD_POLE)
-                    Toast.makeText(this, "پایه بعدی را روی نقشه بزنید", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "پایه بعدی را بزنید", Toast.LENGTH_SHORT).show()
                 }
             } else {
                 binding.schematicView.setMode(SchematicView.Mode.ADD_POLE)
-                Toast.makeText(this, "پایه بعدی را روی نقشه بزنید", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "پایه بعدی را بزنید", Toast.LENGTH_SHORT).show()
             }
         }
 
         binding.btnAddOutput.setOnClickListener {
             feederMode = false
             binding.schematicView.setMode(SchematicView.Mode.ADD_OUTPUT)
-            Toast.makeText(this, "خروجی را روی نقشه بزنید", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "خروجی را روی صفحه بزنید", Toast.LENGTH_SHORT).show()
+        }
+
+        // خروج از حالت افزودن / چیدمان
+        binding.btnExitMode.setOnClickListener {
+            feederMode = false
+            lastActiveNodeId = null
+            binding.schematicView.setMode(SchematicView.Mode.NONE)
+            Toast.makeText(this, "از حالت فعلی خارج شدید", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnAutoLayout.setOnClickListener {
             binding.schematicView.autoLayout()
-            Toast.makeText(this, "چیدمان خودکار انجام شد", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "چیدمان انجام شد — برای خروج «خروج از حالت» را بزنید", Toast.LENGTH_SHORT).show()
+        }
+
+        
+        binding.btnOfflineMap.setOnClickListener {
+            startActivity(Intent(this, com.bazdid.trans.ui.offline.OfflineMapActivity::class.java))
+        }
+
+        binding.btnFinish.setOnClickListener {
+            finishDesignAndReturn()
         }
 
         binding.btnClear.setOnClickListener {
             AlertDialog.Builder(this)
                 .setTitle(R.string.clear_schematic)
-                .setMessage("تمام نقشه فشار ضعیف پاک شود؟")
+                .setMessage("تمام نقشه شبکه فشار ضعیف پاک شود؟")
                 .setPositiveButton(R.string.yes) { _, _ ->
                     viewModel.clearAll()
                     lastActiveNodeId = null
@@ -148,32 +156,50 @@ class SchematicActivity : AppCompatActivity() {
     private fun observeData() {
         lifecycleScope.launch {
             viewModel.nodes.collectLatest { nodes ->
-                val connections = viewModel.connections.value
-                binding.schematicView.setData(nodes, connections)
-                // آخرین پایه را به عنوان فعال نگه دار
+                binding.schematicView.setData(nodes, viewModel.connections.value)
                 if (lastActiveNodeId == null) {
-                    lastActiveNodeId = nodes.lastOrNull { it.nodeType == "pole" || it.nodeType == "transformer" }?.id
+                    lastActiveNodeId = nodes.lastOrNull {
+                        it.nodeType == "pole" || it.nodeType == "transformer"
+                    }?.id
                 }
             }
         }
         lifecycleScope.launch {
             viewModel.connections.collectLatest { connections ->
-                val nodes = viewModel.nodes.value
-                binding.schematicView.setData(nodes, connections)
+                binding.schematicView.setData(viewModel.nodes.value, connections)
             }
         }
     }
 
-    private fun showPhaseDialog(node: SchematicNode) {
+    private fun showNodeOptions(node: SchematicNode) {
+        val options = mutableListOf("ویرایش انشعاب", "حذف آیتم")
+        AlertDialog.Builder(this)
+            .setTitle(node.label.ifEmpty { node.nodeType })
+            .setItems(options.toTypedArray()) { _, which ->
+                when (which) {
+                    0 -> showPhaseDialog(node, isNew = false)
+                    1 -> {
+                        viewModel.deleteNode(node)
+                        if (lastActiveNodeId == node.id) lastActiveNodeId = null
+                        Toast.makeText(this, "حذف شد", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            .setNegativeButton("انصراف", null)
+            .show()
+    }
+
+    private fun showPhaseDialog(node: SchematicNode, isNew: Boolean) {
         val inputSingle = EditText(this).apply {
             hint = "تعداد تک‌فاز"
             inputType = InputType.TYPE_CLASS_NUMBER
-            setText(node.singlePhaseCount.toString())
+            // اگر صفر است خالی بگذار
+            setText(if (node.singlePhaseCount > 0) node.singlePhaseCount.toString() else "")
         }
         val inputThree = EditText(this).apply {
             hint = "تعداد سه‌فاز"
             inputType = InputType.TYPE_CLASS_NUMBER
-            setText(node.threePhaseCount.toString())
+            setText(if (node.threePhaseCount > 0) node.threePhaseCount.toString() else "")
         }
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -182,29 +208,81 @@ class SchematicActivity : AppCompatActivity() {
             addView(inputThree)
         }
 
-        AlertDialog.Builder(this)
-            .setTitle(if (node.nodeType == "pole") "ثبت انشعاب روی پایه" else "ثبت انشعاب خروجی")
+        val builder = AlertDialog.Builder(this)
+            .setTitle(if (node.nodeType == "pole") "ثبت انشعاب روی پایه" else "ثبت انشعاب")
             .setView(layout)
             .setPositiveButton("ثبت و ادامه") { _, _ ->
                 val single = inputSingle.text.toString().toIntOrNull() ?: 0
                 val three = inputThree.text.toString().toIntOrNull() ?: 0
                 viewModel.updateNodePhases(node, single, three)
-                Toast.makeText(this, "ذخیره شد — پایه بعدی را بزنید", Toast.LENGTH_SHORT).show()
-                // آماده‌باش برای پایه بعدی
                 if (feederMode) {
                     binding.schematicView.setMode(SchematicView.Mode.ADD_POLE)
+                    Toast.makeText(this, "ذخیره شد — پایه بعدی را بزنید", Toast.LENGTH_SHORT).show()
                 }
             }
-            .setNeutralButton("پایان فیدر") { _, _ ->
+            .setNeutralButton("اتمام فیدر") { _, _ ->
                 val single = inputSingle.text.toString().toIntOrNull() ?: 0
                 val three = inputThree.text.toString().toIntOrNull() ?: 0
                 viewModel.updateNodePhases(node, single, three)
+                // پایه‌های بدون انشعاب = صفر
+                viewModel.zeroUnsetPhases()
                 feederMode = false
                 lastActiveNodeId = null
                 binding.schematicView.setMode(SchematicView.Mode.NONE)
                 Toast.makeText(this, "فیدر تمام شد", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("انصراف", null)
-            .show()
+
+        builder.show()
+    }
+
+    /** محاسبه متراژ و برگشت به صفحه ترانس */
+    private fun finishDesignAndReturn() {
+        viewModel.zeroUnsetPhases()
+        val nodes = viewModel.nodes.value
+        val connections = viewModel.connections.value
+        val nodeMap = nodes.associateBy { it.id }
+
+        var totalMeters = 0.0
+        val segmentLines = mutableListOf<String>()
+        connections.forEach { conn ->
+            val from = nodeMap[conn.fromNodeId]
+            val to = nodeMap[conn.toNodeId]
+            if (from != null && to != null) {
+                val distUnits = hypot(to.x - from.x, to.y - from.y)
+                val meters = distUnits * METERS_PER_UNIT
+                totalMeters += meters
+                segmentLines.add(
+                    "${from.label.ifEmpty { from.nodeType }} → ${to.label.ifEmpty { to.nodeType }}: ${"%.1f".format(meters)} متر"
+                )
+            }
+        }
+
+        val poles = nodes.filter { it.nodeType == "pole" }
+        val totalSingle = poles.sumOf { it.singlePhaseCount }
+        val totalThree = poles.sumOf { it.threePhaseCount }
+        val loadKw = totalSingle * 6.0 + totalThree * 8.0
+
+        val summary = buildString {
+            appendLine("=== خلاصه شبکه فشار ضعیف ===")
+            appendLine("تعداد پایه: ${poles.size}")
+            appendLine("تک‌فاز کل: $totalSingle | سه‌فاز کل: $totalThree")
+            appendLine("بار تقریبی: ${"%.1f".format(loadKw)} kW")
+            appendLine("طول کل شبکه: ${"%.1f".format(totalMeters)} متر")
+            appendLine("--- قطعات ---")
+            segmentLines.forEach { appendLine(it) }
+        }
+
+        // ذخیره در note ترانس از طریق نتیجه Activity
+        val data = Intent().apply {
+            putExtra(RESULT_LENGTHS, summary)
+            putExtra(RESULT_TOTAL_M, totalMeters.toFloat())
+            putExtra("result_single", totalSingle)
+            putExtra("result_three", totalThree)
+            putExtra("result_kw", loadKw.toFloat())
+        }
+        setResult(Activity.RESULT_OK, data)
+        Toast.makeText(this, "محاسبه شد — طول کل: ${"%.0f".format(totalMeters)} متر", Toast.LENGTH_LONG).show()
+        finish()
     }
 }
