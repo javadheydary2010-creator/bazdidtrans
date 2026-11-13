@@ -42,7 +42,7 @@
     <string name="kw">کیلووات</string>
 
     <!-- Schematic -->
-    <string name="schematic_title">نقشه دو‌بعدی فشار ضعیف</string>
+    <string name="schematic_title">نقشه شبکه فشار ضعیف</string>
     <string name="add_node_pole">پایه</string>
     <string name="add_node_output">خروجی</string>
     <string name="connect">اتصال</string>
@@ -54,4 +54,7 @@
     <string name="no">خیر</string>
     <string name="confirm_delete">آیا از حذف مطمئن هستید؟</string>
     <string name="location_permission_needed">برای ثبت موقعیت دقیق، دسترسی به مکان لازم است</string>
+    <string name="finish_design">اتمام و محاسبه</string>
+    <string name="delete_item">حذف آیتم</string>
+    <string name="exit_mode">خروج از حالت</string>
 </resources>
