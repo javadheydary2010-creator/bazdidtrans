@@ -43,4 +43,11 @@ interface SchematicDao {
 
     @Query("DELETE FROM schematic_connections WHERE transformerId = :transformerId")
     suspend fun deleteConnectionsByTransformer(transformerId: Long)
+
+    @Query("DELETE FROM schematic_connections WHERE fromNodeId = :nodeId OR toNodeId = :nodeId")
+    suspend fun deleteConnectionsForNode(nodeId: Long)
+
+    @Delete
+    suspend fun deleteNode(node: SchematicNode)
+
 }
