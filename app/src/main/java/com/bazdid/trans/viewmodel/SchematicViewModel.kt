@@ -45,18 +45,15 @@ class SchematicViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             val id = _transformerId.value
             if (id == -1L) return@launch
-
             val label = if (type == "pole") {
                 "پایه ${nodes.value.count { it.nodeType == "pole" } + 1}"
             } else {
                 if (isThreePhase) "خروجی ۳فاز" else "خروجی ۱فاز"
             }
-
             schematicDao.insertNode(
                 SchematicNode(
                     transformerId = id,
-                    x = x,
-                    y = y,
+                    x = x, y = y,
                     nodeType = type,
                     label = label,
                     isThreePhase = isThreePhase,
@@ -67,16 +64,65 @@ class SchematicViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun addTransformerNode(onCreated: (SchematicNode) -> Unit) {
+        viewModelScope.launch {
+            val id = _transformerId.value
+            if (id == -1L) return@launch
+            val existing = nodes.value.find { it.nodeType == "transformer" }
+            if (existing != null) {
+                onCreated(existing)
+                return@launch
+            }
+            val nodeId = schematicDao.insertNode(
+                SchematicNode(
+                    transformerId = id,
+                    x = 400f, y = 300f,
+                    nodeType = "transformer",
+                    label = "ترانس"
+                )
+            )
+            val node = schematicDao.getNodeById(nodeId)
+            if (node != null) onCreated(node)
+        }
+    }
+
+    fun addNodeAndConnect(
+        x: Float, y: Float, type: String,
+        fromNodeId: Long?,
+        onCreated: (SchematicNode) -> Unit
+    ) {
+        viewModelScope.launch {
+            val tid = _transformerId.value
+            if (tid == -1L) return@launch
+            val label = "پایه ${nodes.value.count { it.nodeType == "pole" } + 1}"
+            val nodeId = schematicDao.insertNode(
+                SchematicNode(
+                    transformerId = tid,
+                    x = x, y = y,
+                    nodeType = type,
+                    label = label
+                )
+            )
+            if (fromNodeId != null) {
+                schematicDao.insertConnection(
+                    SchematicConnection(
+                        transformerId = tid,
+                        fromNodeId = fromNodeId,
+                        toNodeId = nodeId
+                    )
+                )
+            }
+            val node = schematicDao.getNodeById(nodeId)
+            if (node != null) onCreated(node)
+        }
+    }
+
     fun addConnection(fromId: Long, toId: Long) {
         viewModelScope.launch {
             val id = _transformerId.value
             if (id == -1L) return@launch
             schematicDao.insertConnection(
-                SchematicConnection(
-                    transformerId = id,
-                    fromNodeId = fromId,
-                    toNodeId = toId
-                )
+                SchematicConnection(transformerId = id, fromNodeId = fromId, toNodeId = toId)
             )
         }
     }
@@ -92,9 +138,7 @@ class SchematicViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun updateNodePositions(updatedNodes: List<SchematicNode>) {
         viewModelScope.launch {
-            updatedNodes.forEach { node ->
-                schematicDao.updateNode(node)
-            }
+            updatedNodes.forEach { schematicDao.updateNode(it) }
         }
     }
 
