@@ -273,9 +273,9 @@ class SchematicView @JvmOverloads constructor(
                 else -> {
                     val sp = if (node.singlePhaseCount > 0) "۱ف:${node.singlePhaseCount}" else ""
                     val tp = if (node.threePhaseCount > 0) "۳ف:${node.threePhaseCount}" else ""
-                    listOf(sp, tp).filter { it.isNotEmpty() }.joinToString(" ")
+                    val phases = listOf(sp, tp).filter { it.isNotEmpty() }.joinToString(" ")
+                    if (phases.isNotEmpty()) phases else node.label.ifEmpty { "پایه" }
                 }
-                else -> node.label.ifEmpty { "پایه" }
             }
             canvas.drawText(label, node.x, node.y + radius + 28f, textPaint)
         }
