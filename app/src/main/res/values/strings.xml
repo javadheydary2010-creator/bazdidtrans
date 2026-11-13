@@ -37,16 +37,16 @@
     <string name="total_load">بار کل</string>
     <string name="load_percentage">درصد بارگیری</string>
     <string name="add_feeder">افزودن فیدر</string>
-    <string name="schematic">نقشه فشار ضعیف</string>
+    <string name="schematic">کروکی شبکه فشار ضعیف</string>
     <string name="note">یادداشت</string>
     <string name="kw">کیلووات</string>
 
     <!-- Schematic -->
-    <string name="schematic_title">نقشه شبکه فشار ضعیف</string>
+    <string name="schematic_title">کروکی شبکه فشار ضعیف</string>
     <string name="add_node_pole">پایه</string>
     <string name="add_node_output">خروجی</string>
     <string name="connect">اتصال</string>
-    <string name="clear_schematic">پاک کردن نقشه</string>
+    <string name="clear_schematic">پاک کردن کروکی</string>
 
     <!-- Common -->
     <string name="ok">تأیید</string>
