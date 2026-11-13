@@ -19,7 +19,7 @@ class TransformerViewModel(application: Application) : AndroidViewModel(applicat
 
     val transformer: StateFlow<Transformer?> = _transformerId
         .flatMapLatest { id ->
-            if (id == -1L) flowOf(null)
+            if (id == -1L) flowOf<Transformer?>(null)
             else flow {
                 emit(db.transformerDao().getById(id))
             }
@@ -47,7 +47,6 @@ class TransformerViewModel(application: Application) : AndroidViewModel(applicat
                     note = note
                 )
             )
-            // Refresh
             _transformerId.value = current.id
         }
     }
