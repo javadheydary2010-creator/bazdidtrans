@@ -46,5 +46,10 @@
             android:exported="false"
             android:parentActivityName=".ui.transformer.TransformerDetailActivity" />
 
+        <activity
+            android:name=".ui.offline.OfflineMapActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.schematic.SchematicActivity" />
+
     </application>
 </manifest>
