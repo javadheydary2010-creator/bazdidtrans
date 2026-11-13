@@ -26,7 +26,7 @@
         android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-        <!-- نقشه در پس‌زمینه همین صفحه (به جای باز کردن صفحه جدید) -->
+        <!-- نقشه در پس‌زمینه همین صفحه -->
         <org.osmdroid.views.MapView
             android:id="@+id/mapView"
             android:layout_width="match_parent"
