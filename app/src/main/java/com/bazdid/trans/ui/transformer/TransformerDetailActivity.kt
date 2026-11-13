@@ -78,7 +78,9 @@ class TransformerDetailActivity : AppCompatActivity() {
             viewModel.addFeeder()
         }
 
-        binding.btnSave.setOnClickListener {
+        
+        binding.btnExport.setOnClickListener { exportReport() }
+binding.btnSave.setOnClickListener {
             saveTransformer()
         }
 
@@ -141,4 +143,29 @@ class TransformerDetailActivity : AppCompatActivity() {
         viewModel.updateTransformer(name, capacity, note)
         Toast.makeText(this, "ذخیره شد", Toast.LENGTH_SHORT).show()
     }
+
+    private fun exportReport() {
+        val tr = viewModel.transformer.value
+        val feeders = viewModel.feeders.value
+        if (tr == null) return
+        val sb = StringBuilder()
+        sb.appendLine("گزارش ترانس: ${tr.name}")
+        sb.appendLine("ظرفیت: ${tr.capacityKva} kVA")
+        sb.appendLine("موقعیت: ${tr.latitude}, ${tr.longitude}")
+        sb.appendLine("--- فیدرها ---")
+        var totalKw = 0.0
+        feeders.forEach { f ->
+            val kw = f.singlePhaseCount * 6.0 + f.threePhaseCount * 8.0
+            totalKw += kw
+            sb.appendLine("${f.name}: تک‌فاز=${f.singlePhaseCount} سه‌فاز=${f.threePhaseCount} → ${kw} kW")
+        }
+        sb.appendLine("جمع بار: $totalKw kW (≈ ${"%.1f".format(totalKw / 0.9)} kVA)")
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "گزارش ${tr.name}")
+            putExtra(Intent.EXTRA_TEXT, sb.toString())
+        }
+        startActivity(Intent.createChooser(send, "خروجی گزارش"))
+    }
+
 }
