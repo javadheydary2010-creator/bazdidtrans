@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.text.InputType
+import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
@@ -11,12 +12,19 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.preference.PreferenceManager
 import com.bazdid.trans.R
 import com.bazdid.trans.data.entity.SchematicNode
 import com.bazdid.trans.databinding.ActivitySchematicBinding
 import com.bazdid.trans.viewmodel.SchematicViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.CustomZoomButtonsController
+import java.io.File
+import java.io.FileOutputStream
 import kotlin.math.hypot
 
 class SchematicActivity : AppCompatActivity() {
@@ -37,9 +45,16 @@ class SchematicActivity : AppCompatActivity() {
     private var transformerId: Long = -1
     private var lastActiveNodeId: Long? = null
     private var feederMode = false
+    private var isMapVisible = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // راه‌اندازی osmdroid برای نقشه روی همین صفحه
+        Configuration.getInstance().load(this, PreferenceManager.getDefaultSharedPreferences(this))
+        Configuration.getInstance().userAgentValue = packageName
+        prepareOfflineTiles()
+
         binding = ActivitySchematicBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -50,10 +65,40 @@ class SchematicActivity : AppCompatActivity() {
         }
 
         setupToolbar()
+        setupMap()
         setupView()
         setupButtons()
         observeData()
         viewModel.load(transformerId)
+    }
+
+    private fun prepareOfflineTiles() {
+        try {
+            val base = File(getExternalFilesDir(null), "osmdroid")
+            if (!base.exists()) base.mkdirs()
+            val mbtiles = File(base, "mehran_area.mbtiles")
+            if (!mbtiles.exists()) {
+                assets.open("maps/mehran_area.mbtiles").use { input ->
+                    FileOutputStream(mbtiles).use { output -> input.copyTo(output) }
+                }
+            }
+            Configuration.getInstance().osmdroidBasePath = base
+            Configuration.getInstance().osmdroidTileCache = File(base, "tiles")
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun setupMap() {
+        binding.mapView.apply {
+            setTileSource(TileSourceFactory.MAPNIK)
+            setMultiTouchControls(true)
+            zoomController.setVisibility(CustomZoomButtonsController.Visibility.SHOW_AND_FADEOUT)
+            controller.setZoom(15.0)
+            controller.setCenter(GeoPoint(26.95, 54.80)) // مختصات تقریبی منطقه مهران
+            // با کش کار می‌کند؛ در صورت وجود اینترنت از آنلاین و در غیر این صورت از کش استفاده می‌کند
+            setUseDataConnection(true)
+        }
     }
 
     private fun setupToolbar() {
@@ -132,8 +177,9 @@ class SchematicActivity : AppCompatActivity() {
             Toast.makeText(this, "چیدمان انجام شد — برای خروج «خروج از حالت» را بزنید", Toast.LENGTH_SHORT).show()
         }
 
+        // تغییر اصلی: نقشه روی همین صفحه نمایش داده می‌شود (نه صفحه جدید)
         binding.btnOfflineMap.setOnClickListener {
-            startActivity(Intent(this, com.bazdid.trans.ui.offline.OfflineMapActivity::class.java))
+            toggleMapOnSamePage()
         }
 
         binding.btnFinish.setOnClickListener {
@@ -151,6 +197,23 @@ class SchematicActivity : AppCompatActivity() {
                 }
                 .setNegativeButton(R.string.no, null)
                 .show()
+        }
+    }
+
+    /**
+     * نمایش / مخفی کردن نقشه روی همین صفحه کروکی
+     * دیگر صفحه جداگانه باز نمی‌شود
+     */
+    private fun toggleMapOnSamePage() {
+        isMapVisible = !isMapVisible
+        if (isMapVisible) {
+            binding.mapView.visibility = View.VISIBLE
+            binding.btnOfflineMap.text = "مخفی کردن نقشه"
+            Toast.makeText(this, "نقشه روی همین صفحه فعال شد", Toast.LENGTH_SHORT).show()
+        } else {
+            binding.mapView.visibility = View.GONE
+            binding.btnOfflineMap.text = "نقشه آفلاین"
+            Toast.makeText(this, "نقشه مخفی شد", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -279,5 +342,15 @@ class SchematicActivity : AppCompatActivity() {
         setResult(Activity.RESULT_OK, data)
         Toast.makeText(this, "محاسبه شد — طول کل: ${"%.0f".format(totalMeters)} متر", Toast.LENGTH_LONG).show()
         finish()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        binding.mapView.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        binding.mapView.onPause()
     }
 }
