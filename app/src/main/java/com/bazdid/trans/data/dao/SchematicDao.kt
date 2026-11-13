@@ -20,6 +20,9 @@ interface SchematicDao {
     @Query("SELECT * FROM schematic_connections WHERE transformerId = :transformerId")
     suspend fun getConnectionsOnce(transformerId: Long): List<SchematicConnection>
 
+    @Query("SELECT * FROM schematic_nodes WHERE id = :id")
+    suspend fun getNodeById(id: Long): SchematicNode?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertNode(node: SchematicNode): Long
 

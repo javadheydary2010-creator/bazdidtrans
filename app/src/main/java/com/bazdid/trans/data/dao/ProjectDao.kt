@@ -10,6 +10,9 @@ interface ProjectDao {
     @Query("SELECT * FROM projects ORDER BY updatedAt DESC")
     fun getAllProjects(): Flow<List<Project>>
 
+    @Query("SELECT * FROM projects ORDER BY updatedAt DESC")
+    suspend fun getAllProjectsOnce(): List<Project>
+
     @Query("SELECT * FROM projects WHERE id = :id")
     suspend fun getProjectById(id: Long): Project?
 
