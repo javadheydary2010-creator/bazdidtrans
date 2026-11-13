@@ -62,9 +62,11 @@ class TransformerDetailActivity : AppCompatActivity() {
 
             saveTransformer()
 
+            val metersText = "%.0f".format(totalNetworkMeters)
+            val kwText = "%.1f".format(loadKw)
             Toast.makeText(
                 this,
-                "محاسبات اعمال شد — طول: ${"%.0f".format(totalNetworkMeters)} م | بار: ${"%.1f".format(loadKw)} kW",
+                "محاسبات اعمال شد — طول: $metersText م | بار: $kwText kW",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -208,9 +210,10 @@ class TransformerDetailActivity : AppCompatActivity() {
             sb.appendLine("\( {f.name}: تک‌فاز= \){f.singlePhaseCount} | سه‌فاز=${f.threePhaseCount} | ${kw} kW")
         }
         val totalKvaApprox = "%.1f".format(totalKw / 0.9)
-        sb.appendLine("جمع بار فیدرها: $totalKw kW (≈ $totalKvaApprox kVA)")
+        sb.appendLine("جمع بار فیدرها: $totalKw kW ≈ $totalKvaApprox kVA")
         if (totalNetworkMeters > 0) {
-            sb.appendLine("طول کل شبکه فشار ضعیف: ${"%.1f".format(totalNetworkMeters)} متر")
+            val metersFormatted = "%.1f".format(totalNetworkMeters)
+            sb.appendLine("طول کل شبکه فشار ضعیف: $metersFormatted متر")
         }
         if (designSummary.isNotEmpty()) {
             sb.appendLine()
@@ -218,10 +221,23 @@ class TransformerDetailActivity : AppCompatActivity() {
         }
         sb.appendLine("==========================================")
 
-        val geo =
-            "{\"type\":\"Feature\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[\( {tr.longitude}, \){tr.latitude}]},\"properties\":{\"name\":\"\( {tr.name}\",\"capacity_kva\": \){tr.capacityKva},\"load_kw\":$totalKw,\"network_m\":$totalNetworkMeters}}"
+        val geo = buildString {
+            append("{\"type\":\"Feature\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[")
+            append(tr.longitude)
+            append(",")
+            append(tr.latitude)
+            append("]},\"properties\":{\"name\":\"")
+            append(tr.name)
+            append("\",\"capacity_kva\":")
+            append(tr.capacityKva)
+            append(",\"load_kw\":")
+            append(totalKw)
+            append(",\"network_m\":")
+            append(totalNetworkMeters)
+            append("}}")
+        }
 
-        val options = arrayOf("گزارش پرینت (متن)", "خروجی GIS (GeoJSON)")
+        val options = arrayOf("گزارش پرینت - متن", "خروجی GIS - GeoJSON")
         AlertDialog.Builder(this)
             .setTitle("نوع خروجی")
             .setItems(options) { _, which ->
