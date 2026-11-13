@@ -27,6 +27,9 @@ class SchematicActivity : AppCompatActivity() {
         const val METERS_PER_UNIT = 2.5f
         const val RESULT_LENGTHS = "result_lengths_summary"
         const val RESULT_TOTAL_M = "result_total_meters"
+        const val RESULT_SINGLE = "result_single"
+        const val RESULT_THREE = "result_three"
+        const val RESULT_KW = "result_kw"
     }
 
     private lateinit var binding: ActivitySchematicBinding
@@ -117,7 +120,6 @@ class SchematicActivity : AppCompatActivity() {
             Toast.makeText(this, "خروجی را روی صفحه بزنید", Toast.LENGTH_SHORT).show()
         }
 
-        // خروج از حالت افزودن / چیدمان
         binding.btnExitMode.setOnClickListener {
             feederMode = false
             lastActiveNodeId = null
@@ -130,7 +132,6 @@ class SchematicActivity : AppCompatActivity() {
             Toast.makeText(this, "چیدمان انجام شد — برای خروج «خروج از حالت» را بزنید", Toast.LENGTH_SHORT).show()
         }
 
-        
         binding.btnOfflineMap.setOnClickListener {
             startActivity(Intent(this, com.bazdid.trans.ui.offline.OfflineMapActivity::class.java))
         }
@@ -142,7 +143,7 @@ class SchematicActivity : AppCompatActivity() {
         binding.btnClear.setOnClickListener {
             AlertDialog.Builder(this)
                 .setTitle(R.string.clear_schematic)
-                .setMessage("تمام نقشه شبکه فشار ضعیف پاک شود؟")
+                .setMessage("تمام کروکی شبکه فشار ضعیف پاک شود؟")
                 .setPositiveButton(R.string.yes) { _, _ ->
                     viewModel.clearAll()
                     lastActiveNodeId = null
@@ -193,7 +194,6 @@ class SchematicActivity : AppCompatActivity() {
         val inputSingle = EditText(this).apply {
             hint = "تعداد تک‌فاز"
             inputType = InputType.TYPE_CLASS_NUMBER
-            // اگر صفر است خالی بگذار
             setText(if (node.singlePhaseCount > 0) node.singlePhaseCount.toString() else "")
         }
         val inputThree = EditText(this).apply {
@@ -224,7 +224,6 @@ class SchematicActivity : AppCompatActivity() {
                 val single = inputSingle.text.toString().toIntOrNull() ?: 0
                 val three = inputThree.text.toString().toIntOrNull() ?: 0
                 viewModel.updateNodePhases(node, single, three)
-                // پایه‌های بدون انشعاب = صفر
                 viewModel.zeroUnsetPhases()
                 feederMode = false
                 lastActiveNodeId = null
@@ -236,7 +235,10 @@ class SchematicActivity : AppCompatActivity() {
         builder.show()
     }
 
-    /** محاسبه متراژ و برگشت به صفحه ترانس */
+    /**
+     * محاسبه متراژ و بار و برگشت به صفحه ترانس
+     * ریز جزئیات پایه‌ها در یادداشت نوشته نمی‌شود
+     */
     private fun finishDesignAndReturn() {
         viewModel.zeroUnsetPhases()
         val nodes = viewModel.nodes.value
@@ -244,17 +246,12 @@ class SchematicActivity : AppCompatActivity() {
         val nodeMap = nodes.associateBy { it.id }
 
         var totalMeters = 0.0
-        val segmentLines = mutableListOf<String>()
         connections.forEach { conn ->
             val from = nodeMap[conn.fromNodeId]
             val to = nodeMap[conn.toNodeId]
             if (from != null && to != null) {
                 val distUnits = hypot(to.x - from.x, to.y - from.y)
-                val meters = distUnits * METERS_PER_UNIT
-                totalMeters += meters
-                segmentLines.add(
-                    "${from.label.ifEmpty { from.nodeType }} → ${to.label.ifEmpty { to.nodeType }}: ${"%.1f".format(meters)} متر"
-                )
+                totalMeters += distUnits * METERS_PER_UNIT
             }
         }
 
@@ -263,23 +260,21 @@ class SchematicActivity : AppCompatActivity() {
         val totalThree = poles.sumOf { it.threePhaseCount }
         val loadKw = totalSingle * 6.0 + totalThree * 8.0
 
+        // خلاصه بدون ریز پایه
         val summary = buildString {
-            appendLine("=== خلاصه شبکه فشار ضعیف ===")
+            appendLine("=== خلاصه کروکی شبکه فشار ضعیف ===")
             appendLine("تعداد پایه: ${poles.size}")
             appendLine("تک‌فاز کل: $totalSingle | سه‌فاز کل: $totalThree")
             appendLine("بار تقریبی: ${"%.1f".format(loadKw)} kW")
             appendLine("طول کل شبکه: ${"%.1f".format(totalMeters)} متر")
-            appendLine("--- قطعات ---")
-            segmentLines.forEach { appendLine(it) }
         }
 
-        // ذخیره در note ترانس از طریق نتیجه Activity
         val data = Intent().apply {
             putExtra(RESULT_LENGTHS, summary)
             putExtra(RESULT_TOTAL_M, totalMeters.toFloat())
-            putExtra("result_single", totalSingle)
-            putExtra("result_three", totalThree)
-            putExtra("result_kw", loadKw.toFloat())
+            putExtra(RESULT_SINGLE, totalSingle)
+            putExtra(RESULT_THREE, totalThree)
+            putExtra(RESULT_KW, loadKw.toFloat())
         }
         setResult(Activity.RESULT_OK, data)
         Toast.makeText(this, "محاسبه شد — طول کل: ${"%.0f".format(totalMeters)} متر", Toast.LENGTH_LONG).show()

@@ -29,6 +29,20 @@ class SchematicView @JvmOverloads constructor(
     private val minScale = 0.4f
     private val maxScale = 3.0f
 
+    // رنگ‌های متفاوت برای فیدرها
+    private val feederColors = intArrayOf(
+        Color.parseColor("#1565C0"), // آبی
+        Color.parseColor("#2E7D32"), // سبز
+        Color.parseColor("#E65100"), // نارنجی
+        Color.parseColor("#6A1B9A"), // بنفش
+        Color.parseColor("#C62828"), // قرمز
+        Color.parseColor("#00838F"), // فیروزه‌ای
+        Color.parseColor("#F9A825"), // زرد
+        Color.parseColor("#AD1457"), // صورتی تیره
+        Color.parseColor("#37474F"), // خاکستری
+        Color.parseColor("#558B2F")  // سبز روشن
+    )
+
     private val polePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#2E7D32")
         style = Paint.Style.FILL
@@ -48,7 +62,7 @@ class SchematicView @JvmOverloads constructor(
     }
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#1565C0")
-        strokeWidth = 5f
+        strokeWidth = 6f
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
     }
@@ -66,6 +80,9 @@ class SchematicView @JvmOverloads constructor(
     private var selectedNodeId: Long? = null
     private var mode: Mode = Mode.NONE
     private var connectFromId: Long? = null
+
+    /** نقشه nodeId -> شماره فیدر (برای رنگ‌بندی) */
+    private var nodeFeederIndex = mapOf<Long, Int>()
 
     var onNodeAdded: ((Float, Float, String) -> Unit)? = null
     var onConnectionRequested: ((Long, Long) -> Unit)? = null
@@ -109,6 +126,7 @@ class SchematicView @JvmOverloads constructor(
         nodes.addAll(nodeList)
         connections.clear()
         connections.addAll(connList)
+        computeFeederColors()
         invalidate()
     }
 
@@ -117,6 +135,49 @@ class SchematicView @JvmOverloads constructor(
         connectFromId = null
         selectedNodeId = null
         invalidate()
+    }
+
+    /**
+     * از نود ترانس شروع می‌کند و هر شاخه مستقیم را یک فیدر جدا با رنگ جدا در نظر می‌گیرد.
+     */
+    private fun computeFeederColors() {
+        val adj = mutableMapOf<Long, MutableList<Long>>()
+        connections.forEach { c ->
+            adj.getOrPut(c.fromNodeId) { mutableListOf() }.add(c.toNodeId)
+            adj.getOrPut(c.toNodeId) { mutableListOf() }.add(c.fromNodeId)
+        }
+
+        val transformer = nodes.find { it.nodeType == "transformer" }
+        val result = mutableMapOf<Long, Int>()
+
+        if (transformer == null) {
+            // بدون ترانس: همه یک رنگ
+            nodes.forEach { result[it.id] = 0 }
+            nodeFeederIndex = result
+            return
+        }
+
+        result[transformer.id] = -1 // ترانس رنگ ندارد
+        val neighbors = adj[transformer.id].orEmpty()
+        neighbors.forEachIndexed { feederIdx, startId ->
+            val queue = ArrayDeque<Long>()
+            queue.add(startId)
+            result[startId] = feederIdx
+            while (queue.isNotEmpty()) {
+                val cur = queue.removeFirst()
+                for (next in adj[cur].orEmpty()) {
+                    if (next !in result) {
+                        result[next] = feederIdx
+                        queue.add(next)
+                    }
+                }
+            }
+        }
+        // نودهای جدا
+        nodes.forEach { n ->
+            if (n.id !in result) result[n.id] = 0
+        }
+        nodeFeederIndex = result
     }
 
     /** چیدمان خودکار مرتب برای جلوگیری از شلوغی */
@@ -132,7 +193,6 @@ class SchematicView @JvmOverloads constructor(
         val outputGapX = 130f
         val outputGapY = 90f
 
-        // قرار دادن پایه‌ها در سمت چپ به صورت ستونی
         poles.forEachIndexed { index, pole ->
             val idx = nodes.indexOfFirst { it.id == pole.id }
             if (idx >= 0) {
@@ -140,12 +200,10 @@ class SchematicView @JvmOverloads constructor(
             }
         }
 
-        // خروجی‌ها را در سمت راست پایه‌ها پخش می‌کنیم
         if (poles.isNotEmpty()) {
             var outIndex = 0
-            poles.forEachIndexed { pIndex, pole ->
+            poles.forEachIndexed { _, pole ->
                 val currentPole = nodes.find { it.id == pole.id } ?: return@forEachIndexed
-                // چند خروجی نزدیک به این پایه
                 val countNearThis = max(1, outputs.size / poles.size)
                 repeat(countNearThis) {
                     if (outIndex >= outputs.size) return@repeat
@@ -159,7 +217,6 @@ class SchematicView @JvmOverloads constructor(
                     outIndex++
                 }
             }
-            // باقی‌مانده خروجی‌ها
             while (outIndex < outputs.size) {
                 val out = outputs[outIndex]
                 val idx = nodes.indexOfFirst { it.id == out.id }
@@ -172,7 +229,6 @@ class SchematicView @JvmOverloads constructor(
                 outIndex++
             }
         } else {
-            // فقط خروجی
             outputs.forEachIndexed { i, out ->
                 val idx = nodes.indexOfFirst { it.id == out.id }
                 if (idx >= 0) {
@@ -184,11 +240,11 @@ class SchematicView @JvmOverloads constructor(
             }
         }
 
-        // ریست زوم و مرکز کردن
         scaleFactor = 1f
         offsetX = 0f
         offsetY = 0f
         onNodesRepositioned?.invoke(nodes.toList())
+        computeFeederColors()
         invalidate()
     }
 
@@ -230,11 +286,19 @@ class SchematicView @JvmOverloads constructor(
         canvas.translate(offsetX, offsetY)
         canvas.scale(scaleFactor, scaleFactor)
 
-        // خطوط
+        // خطوط با رنگ فیدر
         connections.forEach { conn ->
             val from = nodes.find { it.id == conn.fromNodeId }
             val to = nodes.find { it.id == conn.toNodeId }
             if (from != null && to != null) {
+                val feederIdx = when {
+                    nodeFeederIndex[from.id] != null && nodeFeederIndex[from.id]!! >= 0 ->
+                        nodeFeederIndex[from.id]!!
+                    nodeFeederIndex[to.id] != null && nodeFeederIndex[to.id]!! >= 0 ->
+                        nodeFeederIndex[to.id]!!
+                    else -> 0
+                }
+                linePaint.color = feederColors[feederIdx % feederColors.size]
                 canvas.drawLine(from.x, from.y, to.x, to.y, linePaint)
             }
         }
@@ -243,7 +307,6 @@ class SchematicView @JvmOverloads constructor(
         nodes.forEach { node ->
             when (node.nodeType) {
                 "transformer" -> {
-                    // مستطیل + دایره (نماد ترانس)
                     val w = 50f; val h = 40f
                     canvas.drawRect(node.x - w, node.y - h, node.x + w, node.y + h, transformerPaint)
                     canvas.drawCircle(node.x, node.y, 22f, transformerStroke)
@@ -252,7 +315,13 @@ class SchematicView @JvmOverloads constructor(
                     canvas.drawCircle(node.x, node.y, 26f, outputPaint)
                 }
                 else -> {
-                    // پایه: دایره با قطر
+                    // رنگ پایه کمی نزدیک به فیدرش
+                    val fIdx = nodeFeederIndex[node.id] ?: 0
+                    if (fIdx >= 0) {
+                        polePaint.color = feederColors[fIdx % feederColors.size]
+                    } else {
+                        polePaint.color = Color.parseColor("#2E7D32")
+                    }
                     canvas.drawCircle(node.x, node.y, 34f, polePaint)
                     canvas.drawLine(node.x - 20f, node.y - 20f, node.x + 20f, node.y + 20f, transformerStroke)
                 }
