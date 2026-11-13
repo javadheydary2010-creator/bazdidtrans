@@ -33,6 +33,15 @@ class SchematicView @JvmOverloads constructor(
         color = Color.parseColor("#2E7D32")
         style = Paint.Style.FILL
     }
+    private val transformerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#C62828")
+        style = Paint.Style.FILL
+    }
+    private val transformerStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#B71C1C")
+        style = Paint.Style.STROKE
+        strokeWidth = 4f
+    }
     private val outputPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#F9A825")
         style = Paint.Style.FILL
@@ -232,9 +241,27 @@ class SchematicView @JvmOverloads constructor(
 
         // نودها
         nodes.forEach { node ->
-            val paint = if (node.nodeType == "output") outputPaint else polePaint
-            val radius = if (node.nodeType == "output") 26f else 34f
-            canvas.drawCircle(node.x, node.y, radius, paint)
+            when (node.nodeType) {
+                "transformer" -> {
+                    // مستطیل + دایره (نماد ترانس)
+                    val w = 50f; val h = 40f
+                    canvas.drawRect(node.x - w, node.y - h, node.x + w, node.y + h, transformerPaint)
+                    canvas.drawCircle(node.x, node.y, 22f, transformerStroke)
+                }
+                "output" -> {
+                    canvas.drawCircle(node.x, node.y, 26f, outputPaint)
+                }
+                else -> {
+                    // پایه: دایره با قطر
+                    canvas.drawCircle(node.x, node.y, 34f, polePaint)
+                    canvas.drawLine(node.x - 20f, node.y - 20f, node.x + 20f, node.y + 20f, transformerStroke)
+                }
+            }
+            val radius = when (node.nodeType) {
+                "output" -> 26f
+                "transformer" -> 50f
+                else -> 34f
+            }
 
             if (node.id == selectedNodeId || node.id == connectFromId) {
                 canvas.drawCircle(node.x, node.y, radius + 7f, selectedPaint)
@@ -242,6 +269,12 @@ class SchematicView @JvmOverloads constructor(
 
             val label = when {
                 node.nodeType == "output" -> if (node.isThreePhase) "۳فاز" else "۱فاز"
+                node.nodeType == "transformer" -> "ترانس"
+                else -> {
+                    val sp = if (node.singlePhaseCount > 0) "۱ف:${node.singlePhaseCount}" else ""
+                    val tp = if (node.threePhaseCount > 0) "۳ف:${node.threePhaseCount}" else ""
+                    listOf(sp, tp).filter { it.isNotEmpty() }.joinToString(" ")
+                }
                 else -> node.label.ifEmpty { "پایه" }
             }
             canvas.drawText(label, node.x, node.y + radius + 28f, textPaint)
@@ -258,7 +291,7 @@ class SchematicView @JvmOverloads constructor(
 
     private fun findNodeAt(x: Float, y: Float): SchematicNode? {
         return nodes.find { node ->
-            val r = if (node.nodeType == "output") 38f else 48f
+            val r = when (node.nodeType) { "output" -> 38f; "transformer" -> 60f; else -> 48f }
             hypot(node.x - x, node.y - y) <= r
         }
     }
