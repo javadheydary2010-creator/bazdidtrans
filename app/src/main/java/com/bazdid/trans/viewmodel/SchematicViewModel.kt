@@ -153,4 +153,29 @@ class SchematicViewModel(application: Application) : AndroidViewModel(applicatio
             )
         }
     }
+
+    fun deleteNode(node: SchematicNode) {
+        viewModelScope.launch {
+            schematicDao.deleteConnectionsForNode(node.id)
+            schematicDao.deleteNode(node)
+        }
+    }
+
+    fun zeroUnsetPhases() {
+        viewModelScope.launch {
+            nodes.value.forEach { node ->
+                if (node.nodeType == "pole") {
+                    // مقادیر فعلی حفظ می‌شوند؛ اگر null نبود همان می‌ماند
+                    // این متد برای اطمینان از غیرمنفی بودن است
+                    schematicDao.updateNode(
+                        node.copy(
+                            singlePhaseCount = node.singlePhaseCount.coerceAtLeast(0),
+                            threePhaseCount = node.threePhaseCount.coerceAtLeast(0)
+                        )
+                    )
+                }
+            }
+        }
+    }
+
 }
