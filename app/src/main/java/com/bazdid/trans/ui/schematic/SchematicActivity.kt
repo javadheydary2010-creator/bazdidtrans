@@ -1,16 +1,20 @@
 package com.bazdid.trans.ui.schematic
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.text.InputType
 import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
 import com.bazdid.trans.R
@@ -23,6 +27,8 @@ import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
+import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
+import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.hypot
@@ -31,7 +37,6 @@ class SchematicActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_TRANSFORMER_ID = "transformer_id"
-        /** متر به ازای هر واحد مختصات Canvas (قابل تنظیم) */
         const val METERS_PER_UNIT = 2.5f
         const val RESULT_LENGTHS = "result_lengths_summary"
         const val RESULT_TOTAL_M = "result_total_meters"
@@ -46,11 +51,23 @@ class SchematicActivity : AppCompatActivity() {
     private var lastActiveNodeId: Long? = null
     private var feederMode = false
     private var isMapVisible = false
+    private var myLocationOverlay: MyLocationNewOverlay? = null
+
+    private val locationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        ) {
+            enableMyLocation()
+        } else {
+            Toast.makeText(this, "برای نمایش موقعیت مکانی، دسترسی لوکیشن لازم است", Toast.LENGTH_LONG).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // راه‌اندازی osmdroid برای نقشه روی همین صفحه
         Configuration.getInstance().load(this, PreferenceManager.getDefaultSharedPreferences(this))
         Configuration.getInstance().userAgentValue = packageName
         prepareOfflineTiles()
@@ -94,10 +111,47 @@ class SchematicActivity : AppCompatActivity() {
             setTileSource(TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
             zoomController.setVisibility(CustomZoomButtonsController.Visibility.SHOW_AND_FADEOUT)
-            controller.setZoom(15.0)
-            controller.setCenter(GeoPoint(26.95, 54.80)) // مختصات تقریبی منطقه مهران
-            // با کش کار می‌کند؛ در صورت وجود اینترنت از آنلاین و در غیر این صورت از کش استفاده می‌کند
+            setBuiltInZoomControls(false)
+            isHorizontalMapRepetitionEnabled = false
+            isVerticalMapRepetitionEnabled = false
+            controller.setZoom(17.0)
+            controller.setCenter(GeoPoint(26.95, 54.80))
             setUseDataConnection(true)
+            setBackgroundColor(0x00000000)
+        }
+        checkLocationPermission()
+    }
+
+    private fun checkLocationPermission() {
+        val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+        val coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED) {
+            enableMyLocation()
+        } else {
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+
+    private fun enableMyLocation() {
+        if (myLocationOverlay == null) {
+            myLocationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(this), binding.mapView).apply {
+                enableMyLocation()
+                enableFollowLocation()
+                isDrawAccuracyEnabled = true
+            }
+            binding.mapView.overlays.add(myLocationOverlay)
+        } else {
+            myLocationOverlay?.enableMyLocation()
+            myLocationOverlay?.enableFollowLocation()
+        }
+        myLocationOverlay?.myLocation?.let {
+            binding.mapView.controller.animateTo(it)
+            binding.mapView.controller.setZoom(18.0)
         }
     }
 
@@ -177,7 +231,6 @@ class SchematicActivity : AppCompatActivity() {
             Toast.makeText(this, "چیدمان انجام شد — برای خروج «خروج از حالت» را بزنید", Toast.LENGTH_SHORT).show()
         }
 
-        // تغییر اصلی: نقشه روی همین صفحه نمایش داده می‌شود (نه صفحه جدید)
         binding.btnOfflineMap.setOnClickListener {
             toggleMapOnSamePage()
         }
@@ -200,18 +253,20 @@ class SchematicActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * نمایش / مخفی کردن نقشه روی همین صفحه کروکی
-     * دیگر صفحه جداگانه باز نمی‌شود
-     */
     private fun toggleMapOnSamePage() {
         isMapVisible = !isMapVisible
         if (isMapVisible) {
             binding.mapView.visibility = View.VISIBLE
+            binding.schematicView.bringToFront()
+            binding.schematicView.passThroughTouches = true
             binding.btnOfflineMap.text = "مخفی کردن نقشه"
-            Toast.makeText(this, "نقشه روی همین صفحه فعال شد", Toast.LENGTH_SHORT).show()
+            binding.mapView.invalidate()
+            // فعال کردن موقعیت مکانی
+            enableMyLocation()
+            Toast.makeText(this, "نقشه فعال است — نقطه آبی موقعیت شماست. با دکمه پایه روی نقشه بگذارید", Toast.LENGTH_LONG).show()
         } else {
             binding.mapView.visibility = View.GONE
+            binding.schematicView.passThroughTouches = false
             binding.btnOfflineMap.text = "نقشه آفلاین"
             Toast.makeText(this, "نقشه مخفی شد", Toast.LENGTH_SHORT).show()
         }
@@ -298,10 +353,6 @@ class SchematicActivity : AppCompatActivity() {
         builder.show()
     }
 
-    /**
-     * محاسبه متراژ و بار و برگشت به صفحه ترانس
-     * ریز جزئیات پایه‌ها در یادداشت نوشته نمی‌شود
-     */
     private fun finishDesignAndReturn() {
         viewModel.zeroUnsetPhases()
         val nodes = viewModel.nodes.value
@@ -323,7 +374,6 @@ class SchematicActivity : AppCompatActivity() {
         val totalThree = poles.sumOf { it.threePhaseCount }
         val loadKw = totalSingle * 6.0 + totalThree * 8.0
 
-        // خلاصه بدون ریز پایه
         val summary = buildString {
             appendLine("=== خلاصه کروکی شبکه فشار ضعیف ===")
             appendLine("تعداد پایه: ${poles.size}")
@@ -347,10 +397,12 @@ class SchematicActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         binding.mapView.onResume()
+        myLocationOverlay?.enableMyLocation()
     }
 
     override fun onPause() {
         super.onPause()
+        myLocationOverlay?.disableMyLocation()
         binding.mapView.onPause()
     }
 }
