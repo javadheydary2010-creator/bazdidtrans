@@ -207,7 +207,8 @@ class TransformerDetailActivity : AppCompatActivity() {
             totalKw += kw
             sb.appendLine("\( {f.name}: تک‌فاز= \){f.singlePhaseCount} | سه‌فاز=${f.threePhaseCount} | ${kw} kW")
         }
-        sb.appendLine("جمع بار فیدرها: $totalKw kW (≈ ${"%.1f".format(totalKw / 0.9)} kVA)")
+        val totalKvaApprox = "%.1f".format(totalKw / 0.9)
+        sb.appendLine("جمع بار فیدرها: $totalKw kW (≈ $totalKvaApprox kVA)")
         if (totalNetworkMeters > 0) {
             sb.appendLine("طول کل شبکه فشار ضعیف: ${"%.1f".format(totalNetworkMeters)} متر")
         }
@@ -218,7 +219,7 @@ class TransformerDetailActivity : AppCompatActivity() {
         sb.appendLine("==========================================")
 
         val geo =
-            """{"type":"Feature","geometry":{"type":"Point","coordinates":[\( {tr.longitude}, \){tr.latitude}]},"properties":{"name":"\( {tr.name}","capacity_kva": \){tr.capacityKva},"load_kw":$totalKw,"network_m":$totalNetworkMeters}}"""
+            "{\"type\":\"Feature\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[\( {tr.longitude}, \){tr.latitude}]},\"properties\":{\"name\":\"\( {tr.name}\",\"capacity_kva\": \){tr.capacityKva},\"load_kw\":$totalKw,\"network_m\":$totalNetworkMeters}}"
 
         val options = arrayOf("گزارش پرینت (متن)", "خروجی GIS (GeoJSON)")
         AlertDialog.Builder(this)
