@@ -26,10 +26,18 @@
         android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
+        <!-- نقشه در پس‌زمینه همین صفحه (به جای باز کردن صفحه جدید) -->
+        <org.osmdroid.views.MapView
+            android:id="@+id/mapView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
         <com.bazdid.trans.ui.schematic.SchematicView
             android:id="@+id/schematicView"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent"
+            android:background="@android:color/transparent" />
 
     </FrameLayout>
 
@@ -107,7 +115,6 @@
                 android:textSize="12sp"
                 app:backgroundTint="#2E7D32" />
 
-            
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnOfflineMap"
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
@@ -115,7 +122,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_margin="3dp"
-                android:text="نقشه آنلاین"
+                android:text="نقشه آفلاین"
                 android:textSize="11sp" />
 
             <com.google.android.material.button.MaterialButton
