@@ -2,6 +2,7 @@ package com.bazdid.trans.ui.transformer
 
 import android.content.Intent
 import android.os.Bundle
+import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
@@ -24,6 +25,27 @@ class TransformerDetailActivity : AppCompatActivity() {
     }
 
     private lateinit var binding: ActivityTransformerDetailBinding
+    private var designSummary: String = ""
+    private var totalNetworkMeters: Float = 0f
+
+    private val schematicLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val data = result.data
+            designSummary = data?.getStringExtra(SchematicActivity.RESULT_LENGTHS) ?: ""
+            totalNetworkMeters = data?.getFloatExtra(SchematicActivity.RESULT_TOTAL_M, 0f) ?: 0f
+            if (designSummary.isNotEmpty()) {
+                val current = binding.etNote.text?.toString().orEmpty()
+                if ("=== خلاصه شبکه" !in current) {
+                    binding.etNote.setText((current + "\n" + designSummary).trim())
+                } else {
+                    binding.etNote.setText(designSummary)
+                }
+                android.widget.Toast.makeText(this, "طول شبکه: ${"%.0f".format(totalNetworkMeters)} متر", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     private val viewModel: TransformerViewModel by viewModels()
     private lateinit var feederAdapter: FeederAdapter
 
@@ -88,7 +110,7 @@ binding.btnSave.setOnClickListener {
             val intent = Intent(this, SchematicActivity::class.java).apply {
                 putExtra(SchematicActivity.EXTRA_TRANSFORMER_ID, transformerId)
             }
-            startActivity(intent)
+            schematicLauncher.launch(intent)
         }
 
         binding.btnDelete.setOnClickListener {
@@ -145,11 +167,11 @@ binding.btnSave.setOnClickListener {
     }
 
     private fun exportReport() {
-        val tr = viewModel.transformer.value
+        val tr = viewModel.transformer.value ?: return
         val feeders = viewModel.feeders.value
-        if (tr == null) return
         val sb = StringBuilder()
-        sb.appendLine("گزارش ترانس: ${tr.name}")
+        sb.appendLine("========== گزارش بازدید ترانس ==========")
+        sb.appendLine("نام: ${tr.name}")
         sb.appendLine("ظرفیت: ${tr.capacityKva} kVA")
         sb.appendLine("موقعیت: ${tr.latitude}, ${tr.longitude}")
         sb.appendLine("--- فیدرها ---")
@@ -157,15 +179,35 @@ binding.btnSave.setOnClickListener {
         feeders.forEach { f ->
             val kw = f.singlePhaseCount * 6.0 + f.threePhaseCount * 8.0
             totalKw += kw
-            sb.appendLine("${f.name}: تک‌فاز=${f.singlePhaseCount} سه‌فاز=${f.threePhaseCount} → ${kw} kW")
+            sb.appendLine("${f.name}: تک‌فاز=${f.singlePhaseCount} | سه‌فاز=${f.threePhaseCount} | ${kw} kW")
         }
-        sb.appendLine("جمع بار: $totalKw kW (≈ ${"%.1f".format(totalKw / 0.9)} kVA)")
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, "گزارش ${tr.name}")
-            putExtra(Intent.EXTRA_TEXT, sb.toString())
+        sb.appendLine("جمع بار فیدرها: $totalKw kW (≈ ${"%.1f".format(totalKw / 0.9)} kVA)")
+        if (totalNetworkMeters > 0) {
+            sb.appendLine("طول کل شبکه فشار ضعیف: ${"%.1f".format(totalNetworkMeters)} متر")
         }
-        startActivity(Intent.createChooser(send, "خروجی گزارش"))
+        if (designSummary.isNotEmpty()) {
+            sb.appendLine()
+            sb.appendLine(designSummary)
+        }
+        sb.appendLine("==========================================")
+
+        // GeoJSON ساده برای GIS
+        val geo = """{"type":"Feature","geometry":{"type":"Point","coordinates":[${tr.longitude},${tr.latitude}]},"properties":{"name":"${tr.name}","capacity_kva":${tr.capacityKva},"load_kw":$totalKw,"network_m":$totalNetworkMeters}}"""
+
+        val options = arrayOf("گزارش پرینت (متن)", "خروجی GIS (GeoJSON)")
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("نوع خروجی")
+            .setItems(options) { _, which ->
+                val text = if (which == 0) sb.toString() else geo
+                val subject = if (which == 0) "گزارش ${tr.name}" else "GIS ${tr.name}"
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_SUBJECT, subject)
+                    putExtra(Intent.EXTRA_TEXT, text)
+                }
+                startActivity(Intent.createChooser(send, "اشتراک‌گذاری"))
+            }
+            .show()
     }
 
 }
