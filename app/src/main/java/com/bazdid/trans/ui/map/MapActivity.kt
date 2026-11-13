@@ -43,6 +43,11 @@ import java.io.FileOutputStream
  */
 class MapActivity : AppCompatActivity() {
 
+    companion object {
+        const val EXTRA_PROJECT_ID = "project_id"
+        const val EXTRA_PROJECT_NAME = "project_name"
+    }
+
     private lateinit var binding: ActivityMapBinding
     private val viewModel: MapViewModel by viewModels()
     private var projectId: Long = 1L  // پروژه پیش‌فرض داخلی
