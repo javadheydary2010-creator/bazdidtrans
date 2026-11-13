@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Bundle
 import android.text.InputType
 import android.view.View
@@ -24,15 +25,24 @@ import com.bazdid.trans.viewmodel.SchematicViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.osmdroid.config.Configuration
+import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
+import org.osmdroid.views.overlay.MapEventsOverlay
+import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.hypot
 
+/**
+ * صفحه کروکی شبکه فشار ضعیف
+ * - وقتی نقشه روشن است: نقاط با مختصات جغرافیایی روی نقشه ثبت می‌شوند و با حرکت نقشه جابجا نمی‌شوند
+ * - موقعیت مکانی (GPS) حتی بدون اینترنت کار می‌کند
+ */
 class SchematicActivity : AppCompatActivity() {
 
     companion object {
@@ -53,6 +63,12 @@ class SchematicActivity : AppCompatActivity() {
     private var isMapVisible = false
     private var myLocationOverlay: MyLocationNewOverlay? = null
 
+    // برای رسم نقاط و خطوط روی نقشه
+    private val nodeMarkers = mutableMapOf<Long, Marker>()
+    private val connectionPolylines = mutableListOf<Polyline>()
+    private var mapEventsOverlay: MapEventsOverlay? = null
+    private var currentAddMode: SchematicView.Mode = SchematicView.Mode.NONE
+
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -61,7 +77,7 @@ class SchematicActivity : AppCompatActivity() {
         ) {
             enableMyLocation()
         } else {
-            Toast.makeText(this, "برای نمایش موقعیت مکانی، دسترسی لوکیشن لازم است", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "برای ثبت دقیق موقعیت، دسترسی لوکیشن لازم است", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -116,9 +132,31 @@ class SchematicActivity : AppCompatActivity() {
             isVerticalMapRepetitionEnabled = false
             controller.setZoom(17.0)
             controller.setCenter(GeoPoint(26.95, 54.80))
-            setUseDataConnection(true)
-            setBackgroundColor(0x00000000)
+            setUseDataConnection(true) // اگر اینترنت نباشد از کش استفاده می‌کند
         }
+
+        // رویداد لمس روی نقشه برای قرار دادن پایه
+        mapEventsOverlay = MapEventsOverlay(object : MapEventsReceiver {
+            override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
+                p ?: return false
+                if (!isMapVisible) return false
+                when (currentAddMode) {
+                    SchematicView.Mode.ADD_POLE -> {
+                        addGeoNode(p.latitude, p.longitude, "pole")
+                        return true
+                    }
+                    SchematicView.Mode.ADD_OUTPUT -> {
+                        addGeoNode(p.latitude, p.longitude, "output")
+                        return true
+                    }
+                    else -> return false
+                }
+            }
+
+            override fun longPressHelper(p: GeoPoint?): Boolean = false
+        })
+        binding.mapView.overlays.add(mapEventsOverlay)
+
         checkLocationPermission()
     }
 
@@ -155,6 +193,26 @@ class SchematicActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * افزودن نود با مختصات جغرافیایی واقعی
+     * lat در فیلد x و lon در فیلد y ذخیره می‌شود (برای سازگاری با دیتابیس فعلی)
+     */
+    private fun addGeoNode(lat: Double, lon: Double, type: String) {
+        val x = lat.toFloat()
+        val y = lon.toFloat()
+
+        if (type == "pole" && feederMode) {
+            viewModel.addNodeAndConnect(x, y, "pole", lastActiveNodeId) { newNode ->
+                lastActiveNodeId = newNode.id
+                showPhaseDialog(newNode, isNew = true)
+                refreshMapOverlays()
+            }
+        } else {
+            viewModel.addNode(x, y, type, isThreePhase = false)
+            refreshMapOverlays()
+        }
+    }
+
     private fun setupToolbar() {
         setSupportActionBar(binding.toolbar)
         supportActionBar?.apply {
@@ -165,6 +223,7 @@ class SchematicActivity : AppCompatActivity() {
     }
 
     private fun setupView() {
+        // حالت بدون نقشه (صفحه سفید)
         binding.schematicView.onNodeAdded = { x, y, type ->
             if (type == "pole" && feederMode) {
                 viewModel.addNodeAndConnect(x, y, "pole", lastActiveNodeId) { newNode ->
@@ -193,42 +252,70 @@ class SchematicActivity : AppCompatActivity() {
     private fun setupButtons() {
         binding.btnAddPole.setOnClickListener {
             feederMode = true
+            currentAddMode = SchematicView.Mode.ADD_POLE
             if (lastActiveNodeId == null) {
                 val nodes = viewModel.nodes.value
                 val transformerNode = nodes.find { it.nodeType == "transformer" }
                 if (transformerNode == null) {
-                    viewModel.addTransformerNode { node ->
-                        lastActiveNodeId = node.id
-                        binding.schematicView.setMode(SchematicView.Mode.ADD_POLE)
-                        Toast.makeText(this, "فیدر شروع شد — پایه را روی صفحه بزنید", Toast.LENGTH_LONG).show()
+                    // اگر نقشه روشن است، ترانس را روی موقعیت فعلی GPS بگذار
+                    if (isMapVisible) {
+                        val loc = myLocationOverlay?.myLocation
+                        if (loc != null) {
+                            viewModel.addNode(loc.latitude.toFloat(), loc.longitude.toFloat(), "transformer", false)
+                            // بعد از اضافه شدن، lastActiveNodeId در observe تنظیم می‌شود
+                            Toast.makeText(this, "ترانس روی موقعیت شما قرار گرفت — حالا پایه بعدی را بزنید", Toast.LENGTH_LONG).show()
+                        } else {
+                            viewModel.addTransformerNode { node ->
+                                lastActiveNodeId = node.id
+                                Toast.makeText(this, "فیدر شروع شد — روی نقشه ضربه بزنید", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    } else {
+                        viewModel.addTransformerNode { node ->
+                            lastActiveNodeId = node.id
+                            binding.schematicView.setMode(SchematicView.Mode.ADD_POLE)
+                            Toast.makeText(this, "فیدر شروع شد — پایه را بزنید", Toast.LENGTH_LONG).show()
+                        }
                     }
                 } else {
                     lastActiveNodeId = transformerNode.id
-                    binding.schematicView.setMode(SchematicView.Mode.ADD_POLE)
-                    Toast.makeText(this, "پایه بعدی را بزنید", Toast.LENGTH_SHORT).show()
+                    if (!isMapVisible) {
+                        binding.schematicView.setMode(SchematicView.Mode.ADD_POLE)
+                    }
+                    Toast.makeText(this, if (isMapVisible) "روی نقشه پایه را بزنید" else "پایه بعدی را بزنید", Toast.LENGTH_SHORT).show()
                 }
             } else {
-                binding.schematicView.setMode(SchematicView.Mode.ADD_POLE)
-                Toast.makeText(this, "پایه بعدی را بزنید", Toast.LENGTH_SHORT).show()
+                if (!isMapVisible) {
+                    binding.schematicView.setMode(SchematicView.Mode.ADD_POLE)
+                }
+                Toast.makeText(this, if (isMapVisible) "روی نقشه پایه را بزنید" else "پایه بعدی را بزنید", Toast.LENGTH_SHORT).show()
             }
         }
 
         binding.btnAddOutput.setOnClickListener {
             feederMode = false
-            binding.schematicView.setMode(SchematicView.Mode.ADD_OUTPUT)
-            Toast.makeText(this, "خروجی را روی صفحه بزنید", Toast.LENGTH_SHORT).show()
+            currentAddMode = SchematicView.Mode.ADD_OUTPUT
+            if (!isMapVisible) {
+                binding.schematicView.setMode(SchematicView.Mode.ADD_OUTPUT)
+            }
+            Toast.makeText(this, if (isMapVisible) "روی نقشه خروجی را بزنید" else "خروجی را بزنید", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnExitMode.setOnClickListener {
             feederMode = false
             lastActiveNodeId = null
+            currentAddMode = SchematicView.Mode.NONE
             binding.schematicView.setMode(SchematicView.Mode.NONE)
             Toast.makeText(this, "از حالت فعلی خارج شدید", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnAutoLayout.setOnClickListener {
-            binding.schematicView.autoLayout()
-            Toast.makeText(this, "چیدمان انجام شد — برای خروج «خروج از حالت» را بزنید", Toast.LENGTH_SHORT).show()
+            if (isMapVisible) {
+                Toast.makeText(this, "در حالت نقشه چیدمان خودکار غیرفعال است", Toast.LENGTH_SHORT).show()
+            } else {
+                binding.schematicView.autoLayout()
+                Toast.makeText(this, "چیدمان انجام شد", Toast.LENGTH_SHORT).show()
+            }
         }
 
         binding.btnOfflineMap.setOnClickListener {
@@ -247,6 +334,8 @@ class SchematicActivity : AppCompatActivity() {
                     viewModel.clearAll()
                     lastActiveNodeId = null
                     feederMode = false
+                    currentAddMode = SchematicView.Mode.NONE
+                    clearMapOverlays()
                 }
                 .setNegativeButton(R.string.no, null)
                 .show()
@@ -257,18 +346,118 @@ class SchematicActivity : AppCompatActivity() {
         isMapVisible = !isMapVisible
         if (isMapVisible) {
             binding.mapView.visibility = View.VISIBLE
-            binding.schematicView.bringToFront()
-            binding.schematicView.passThroughTouches = true
+            binding.schematicView.visibility = View.GONE   // کروکی canvas مخفی می‌شود
             binding.btnOfflineMap.text = "مخفی کردن نقشه"
-            binding.mapView.invalidate()
-            // فعال کردن موقعیت مکانی
             enableMyLocation()
-            Toast.makeText(this, "نقشه فعال است — نقطه آبی موقعیت شماست. با دکمه پایه روی نقشه بگذارید", Toast.LENGTH_LONG).show()
+            refreshMapOverlays()
+            Toast.makeText(this, "نقشه فعال شد — نقاط به موقعیت جغرافیایی وصل هستند (حتی آفلاین با GPS)", Toast.LENGTH_LONG).show()
         } else {
             binding.mapView.visibility = View.GONE
-            binding.schematicView.passThroughTouches = false
+            binding.schematicView.visibility = View.VISIBLE
             binding.btnOfflineMap.text = "نقشه آفلاین"
+            currentAddMode = SchematicView.Mode.NONE
             Toast.makeText(this, "نقشه مخفی شد", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** رسم مجدد تمام مارکرها و خطوط روی نقشه */
+    private fun refreshMapOverlays() {
+        if (!isMapVisible) return
+
+        // پاک کردن مارکرها و خطوط قبلی (به جز myLocation و mapEvents)
+        nodeMarkers.values.forEach { binding.mapView.overlays.remove(it) }
+        nodeMarkers.clear()
+        connectionPolylines.forEach { binding.mapView.overlays.remove(it) }
+        connectionPolylines.clear()
+
+        val nodes = viewModel.nodes.value
+        val connections = viewModel.connections.value
+        val nodeMap = nodes.associateBy { it.id }
+
+        // خطوط
+        connections.forEach { conn ->
+            val from = nodeMap[conn.fromNodeId]
+            val to = nodeMap[conn.toNodeId]
+            if (from != null && to != null) {
+                // اگر مختصات شبیه lat/lon باشد (محدوده ایران)
+                val fromGeo = toGeoPoint(from)
+                val toGeo = toGeoPoint(to)
+                if (fromGeo != null && toGeo != null) {
+                    val line = Polyline(binding.mapView).apply {
+                        setPoints(listOf(fromGeo, toGeo))
+                        outlinePaint.color = Color.parseColor("#1565C0")
+                        outlinePaint.strokeWidth = 8f
+                    }
+                    binding.mapView.overlays.add(line)
+                    connectionPolylines.add(line)
+                }
+            }
+        }
+
+        // نقاط
+        nodes.forEach { node ->
+            val geo = toGeoPoint(node) ?: return@forEach
+            val marker = Marker(binding.mapView).apply {
+                position = geo
+                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                title = when (node.nodeType) {
+                    "transformer" -> "ترانس"
+                    "output" -> if (node.isThreePhase) "خروجی ۳فاز" else "خروجی ۱فاز"
+                    else -> {
+                        val sp = if (node.singlePhaseCount > 0) "۱ف:${node.singlePhaseCount}" else ""
+                        val tp = if (node.threePhaseCount > 0) "۳ف:${node.threePhaseCount}" else ""
+                        listOf(sp, tp).filter { it.isNotEmpty() }.joinToString(" ").ifEmpty { "پایه" }
+                    }
+                }
+                // رنگ تقریبی
+                when (node.nodeType) {
+                    "transformer" -> icon = ContextCompat.getDrawable(this@SchematicActivity, android.R.drawable.ic_menu_compass)
+                    "output" -> { /* پیش‌فرض */ }
+                    else -> { /* پیش‌فرض */ }
+                }
+                relatedObject = node
+                setOnMarkerClickListener { m, _ ->
+                    val n = m.relatedObject as? SchematicNode
+                    if (n != null) showNodeOptions(n)
+                    true
+                }
+            }
+            binding.mapView.overlays.add(marker)
+            nodeMarkers[node.id] = marker
+        }
+
+        // myLocation و events را بالاتر نگه داریم
+        myLocationOverlay?.let {
+            binding.mapView.overlays.remove(it)
+            binding.mapView.overlays.add(it)
+        }
+        mapEventsOverlay?.let {
+            binding.mapView.overlays.remove(it)
+            binding.mapView.overlays.add(it)
+        }
+
+        binding.mapView.invalidate()
+    }
+
+    private fun clearMapOverlays() {
+        nodeMarkers.values.forEach { binding.mapView.overlays.remove(it) }
+        nodeMarkers.clear()
+        connectionPolylines.forEach { binding.mapView.overlays.remove(it) }
+        connectionPolylines.clear()
+        binding.mapView.invalidate()
+    }
+
+    /**
+     * تشخیص اینکه x/y مختصات جغرافیایی است یا canvas
+     * محدوده تقریبی ایران: lat 25..40 , lon 44..64
+     */
+    private fun toGeoPoint(node: SchematicNode): GeoPoint? {
+        val lat = node.x.toDouble()
+        val lon = node.y.toDouble()
+        return if (lat in 24.0..41.0 && lon in 43.0..65.0) {
+            GeoPoint(lat, lon)
+        } else {
+            null // مختصات canvas قدیمی
         }
     }
 
@@ -281,11 +470,13 @@ class SchematicActivity : AppCompatActivity() {
                         it.nodeType == "pole" || it.nodeType == "transformer"
                     }?.id
                 }
+                refreshMapOverlays()
             }
         }
         lifecycleScope.launch {
             viewModel.connections.collectLatest { connections ->
                 binding.schematicView.setData(viewModel.nodes.value, connections)
+                refreshMapOverlays()
             }
         }
     }
@@ -326,7 +517,7 @@ class SchematicActivity : AppCompatActivity() {
             addView(inputThree)
         }
 
-        val builder = AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle(if (node.nodeType == "pole") "ثبت انشعاب روی پایه" else "ثبت انشعاب")
             .setView(layout)
             .setPositiveButton("ثبت و ادامه") { _, _ ->
@@ -334,7 +525,8 @@ class SchematicActivity : AppCompatActivity() {
                 val three = inputThree.text.toString().toIntOrNull() ?: 0
                 viewModel.updateNodePhases(node, single, three)
                 if (feederMode) {
-                    binding.schematicView.setMode(SchematicView.Mode.ADD_POLE)
+                    currentAddMode = SchematicView.Mode.ADD_POLE
+                    if (!isMapVisible) binding.schematicView.setMode(SchematicView.Mode.ADD_POLE)
                     Toast.makeText(this, "ذخیره شد — پایه بعدی را بزنید", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -345,12 +537,12 @@ class SchematicActivity : AppCompatActivity() {
                 viewModel.zeroUnsetPhases()
                 feederMode = false
                 lastActiveNodeId = null
+                currentAddMode = SchematicView.Mode.NONE
                 binding.schematicView.setMode(SchematicView.Mode.NONE)
                 Toast.makeText(this, "فیدر تمام شد", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("انصراف", null)
-
-        builder.show()
+            .show()
     }
 
     private fun finishDesignAndReturn() {
@@ -364,8 +556,15 @@ class SchematicActivity : AppCompatActivity() {
             val from = nodeMap[conn.fromNodeId]
             val to = nodeMap[conn.toNodeId]
             if (from != null && to != null) {
-                val distUnits = hypot(to.x - from.x, to.y - from.y)
-                totalMeters += distUnits * METERS_PER_UNIT
+                val fromGeo = toGeoPoint(from)
+                val toGeo = toGeoPoint(to)
+                if (fromGeo != null && toGeo != null) {
+                    // فاصله واقعی جغرافیایی (تقریبی)
+                    totalMeters += fromGeo.distanceToAsDouble(toGeo)
+                } else {
+                    val distUnits = hypot(to.x - from.x, to.y - from.y)
+                    totalMeters += distUnits * METERS_PER_UNIT
+                }
             }
         }
 
