@@ -89,6 +89,9 @@ class SchematicView @JvmOverloads constructor(
     var onNodesRepositioned: ((List<SchematicNode>) -> Unit)? = null
     var onNodeSelected: ((SchematicNode) -> Unit)? = null
 
+    /** وقتی true باشد، تاچ‌ها را به MapView زیرین پاس می‌دهد */
+    var passThroughTouches: Boolean = false
+
     enum class Mode { NONE, ADD_POLE, ADD_OUTPUT, CONNECT }
 
     private val scaleDetector = ScaleGestureDetector(context,
@@ -151,13 +154,12 @@ class SchematicView @JvmOverloads constructor(
         val result = mutableMapOf<Long, Int>()
 
         if (transformer == null) {
-            // بدون ترانس: همه یک رنگ
             nodes.forEach { result[it.id] = 0 }
             nodeFeederIndex = result
             return
         }
 
-        result[transformer.id] = -1 // ترانس رنگ ندارد
+        result[transformer.id] = -1
         val neighbors = adj[transformer.id].orEmpty()
         neighbors.forEachIndexed { feederIdx, startId ->
             val queue = ArrayDeque<Long>()
@@ -173,7 +175,6 @@ class SchematicView @JvmOverloads constructor(
                 }
             }
         }
-        // نودهای جدا
         nodes.forEach { n ->
             if (n.id !in result) result[n.id] = 0
         }
@@ -267,15 +268,21 @@ class SchematicView @JvmOverloads constructor(
                         onConnectionRequested?.invoke(connectFromId!!, tapped.id)
                         connectFromId = null
                         selectedNodeId = null
+                        mode = Mode.NONE
                         invalidate()
                     }
                 }
             }
             Mode.NONE -> {
                 val tapped = findNodeAt(x, y)
-                selectedNodeId = tapped?.id
-                tapped?.let { onNodeSelected?.invoke(it) }
-                invalidate()
+                if (tapped != null) {
+                    selectedNodeId = tapped.id
+                    onNodeSelected?.invoke(tapped)
+                    invalidate()
+                } else {
+                    selectedNodeId = null
+                    invalidate()
+                }
             }
         }
     }
@@ -307,15 +314,15 @@ class SchematicView @JvmOverloads constructor(
         nodes.forEach { node ->
             when (node.nodeType) {
                 "transformer" -> {
-                    val w = 50f; val h = 40f
-                    canvas.drawRect(node.x - w, node.y - h, node.x + w, node.y + h, transformerPaint)
+                    val w = 70f
+                    val h = 50f
+                    canvas.drawRect(node.x - w / 2, node.y - h / 2, node.x + w / 2, node.y + h / 2, transformerPaint)
                     canvas.drawCircle(node.x, node.y, 22f, transformerStroke)
                 }
                 "output" -> {
                     canvas.drawCircle(node.x, node.y, 26f, outputPaint)
                 }
                 else -> {
-                    // رنگ پایه کمی نزدیک به فیدرش
                     val fIdx = nodeFeederIndex[node.id] ?: 0
                     if (fIdx >= 0) {
                         polePaint.color = feederColors[fIdx % feederColors.size]
@@ -353,6 +360,10 @@ class SchematicView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        // اگر در حالت عادی باشیم و passThrough فعال باشد → اجازه بده نقشه حرکت کند
+        if (passThroughTouches && mode == Mode.NONE) {
+            return false
+        }
         scaleDetector.onTouchEvent(event)
         gestureDetector.onTouchEvent(event)
         return true
