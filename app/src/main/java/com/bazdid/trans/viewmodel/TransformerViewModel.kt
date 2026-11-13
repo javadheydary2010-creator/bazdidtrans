@@ -47,6 +47,7 @@ class TransformerViewModel(application: Application) : AndroidViewModel(applicat
                     note = note
                 )
             )
+            // Refresh
             _transformerId.value = current.id
         }
     }
