@@ -13,7 +13,7 @@ import java.io.File
 import java.io.FileOutputStream
 
 /**
- * نمایش نقشه آفلاین (MBTiles کپی‌شده از assets)
+ * نمایش نقشه آنلاین (با امکان استفاده از کش در صورت نبود اینترنت)
  */
 class OfflineMapActivity : AppCompatActivity() {
 
@@ -32,7 +32,7 @@ class OfflineMapActivity : AppCompatActivity() {
 
         setSupportActionBar(binding.toolbar)
         supportActionBar?.apply {
-            title = "نقشه آفلاین"
+            title = "نقشه آنلاین"
             setDisplayHomeAsUpEnabled(true)
         }
         binding.toolbar.setNavigationOnClickListener { finish() }
@@ -43,14 +43,14 @@ class OfflineMapActivity : AppCompatActivity() {
             zoomController.setVisibility(CustomZoomButtonsController.Visibility.SHOW_AND_FADEOUT)
             controller.setZoom(14.0)
             controller.setCenter(GeoPoint(26.95, 54.80))
-            // استفاده از کش آفلاین در صورت وجود
-            setUseDataConnection(false)
+            // نقشه آنلاین — در صورت قطع اینترنت از کش استفاده می‌کند
+            setUseDataConnection(true)
         }
 
         Toast.makeText(
             this,
-            "حالت آفلاین — اگر تایل‌ها خالی بودند یک‌بار با اینترنت باز کنید تا کش شود",
-            Toast.LENGTH_LONG
+            "نقشه آنلاین فعال است",
+            Toast.LENGTH_SHORT
         ).show()
     }
 
@@ -68,7 +68,6 @@ class OfflineMapActivity : AppCompatActivity() {
             Configuration.getInstance().osmdroidTileCache = File(base, "tiles")
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(this, "خطا در آماده‌سازی نقشه آفلاین", Toast.LENGTH_SHORT).show()
         }
     }
 
