@@ -68,6 +68,45 @@ class TransformerViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    /**
+     * اعمال نتایج محاسبه‌شده از کروکی روی فیدرها
+     * اگر فیدری وجود نداشته باشد یکی می‌سازد، در غیر این صورت اولی را به‌روز می‌کند
+     * و در صورت نیاز فیدرهای خالی اضافی را پاک نمی‌کند تا داده‌های دستی حفظ شوند.
+     */
+    fun applySchematicTotals(single: Int, three: Int) {
+        viewModelScope.launch {
+            val id = _transformerId.value
+            if (id == -1L) return@launch
+            val currentFeeders = feeders.value
+            if (currentFeeders.isEmpty()) {
+                db.feederDao().insert(
+                    Feeder(
+                        transformerId = id,
+                        name = "فیدر ۱ (از کروکی)",
+                        singlePhaseCount = single.coerceAtLeast(0),
+                        threePhaseCount = three.coerceAtLeast(0)
+                    )
+                )
+            } else {
+                // مجموع را روی اولین فیدر می‌گذاریم و بقیه را صفر می‌کنیم
+                // تا خلاصه بار با کروکی یکی شود
+                val first = currentFeeders.first()
+                db.feederDao().update(
+                    first.copy(
+                        name = if (first.name.contains("کروکی")) first.name else "${first.name} (کروکی)",
+                        singlePhaseCount = single.coerceAtLeast(0),
+                        threePhaseCount = three.coerceAtLeast(0)
+                    )
+                )
+                currentFeeders.drop(1).forEach { f ->
+                    db.feederDao().update(
+                        f.copy(singlePhaseCount = 0, threePhaseCount = 0)
+                    )
+                }
+            }
+        }
+    }
+
     fun updateFeederCounts(feeder: Feeder, single: Int, three: Int) {
         viewModelScope.launch {
             if (feeder.singlePhaseCount != single || feeder.threePhaseCount != three) {
