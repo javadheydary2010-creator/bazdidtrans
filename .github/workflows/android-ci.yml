@@ -27,16 +27,17 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
 
-      - name: Accept licenses
-        run: yes | sdkmanager --licenses > /dev/null || true
+      - name: Accept Android SDK licenses
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
 
-      - name: Grant execute permission for gradlew
+      - name: Grant execute permission for Gradle wrapper
         run: chmod +x ./gradlew
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace --no-daemon
 
-      - name: Upload APK
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: BazdidTrans-debug
