@@ -24,6 +24,7 @@
         <activity
             android:name=".ui.map.MapActivity"
             android:exported="true"
+            android:theme="@style/Theme.BazdidTrans.NoActionBar"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -33,23 +34,27 @@
 
         <activity
             android:name=".ui.project.ProjectListActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:theme="@style/Theme.BazdidTrans.NoActionBar" />
 
         <activity
             android:name=".ui.transformer.TransformerDetailActivity"
             android:exported="false"
             android:parentActivityName=".ui.map.MapActivity"
+            android:theme="@style/Theme.BazdidTrans.NoActionBar"
             android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".ui.schematic.SchematicActivity"
             android:exported="false"
-            android:parentActivityName=".ui.transformer.TransformerDetailActivity" />
+            android:parentActivityName=".ui.transformer.TransformerDetailActivity"
+            android:theme="@style/Theme.BazdidTrans.NoActionBar" />
 
         <activity
             android:name=".ui.offline.OfflineMapActivity"
             android:exported="false"
-            android:parentActivityName=".ui.schematic.SchematicActivity" />
+            android:parentActivityName=".ui.schematic.SchematicActivity"
+            android:theme="@style/Theme.BazdidTrans.NoActionBar" />
 
     </application>
 </manifest>
