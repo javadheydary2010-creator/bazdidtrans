@@ -1,15 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Permissions -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28"
-        tools:ignore="ScopedStorage" />
+        android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
@@ -21,13 +18,13 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.BazdidTrans"
-        android:requestLegacyExternalStorage="true"
-        tools:targetApi="34">
+        android:usesCleartextTraffic="true">
 
+        <!-- صفحه اصلی: نقشه ترانس‌ها -->
         <activity
-            android:name=".ui.project.ProjectListActivity"
+            android:name=".ui.map.MapActivity"
             android:exported="true"
-            android:theme="@style/Theme.BazdidTrans">
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -35,9 +32,8 @@
         </activity>
 
         <activity
-            android:name=".ui.map.MapActivity"
-            android:exported="false"
-            android:parentActivityName=".ui.project.ProjectListActivity" />
+            android:name=".ui.project.ProjectListActivity"
+            android:exported="false" />
 
         <activity
             android:name=".ui.transformer.TransformerDetailActivity"
@@ -51,5 +47,4 @@
             android:parentActivityName=".ui.transformer.TransformerDetailActivity" />
 
     </application>
-
 </manifest>
