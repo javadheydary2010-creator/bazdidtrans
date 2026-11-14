@@ -41,6 +41,39 @@ class SchematicViewModel(application: Application) : AndroidViewModel(applicatio
         _transformerId.value = transformerId
     }
 
+    /**
+     * اگر نود ترانس وجود نداشت، آن را با مختصات جغرافیایی واقعی ترانس می‌سازد
+     */
+    fun ensureTransformerNode(lat: Double, lon: Double, onReady: (SchematicNode) -> Unit) {
+        viewModelScope.launch {
+            val id = _transformerId.value
+            if (id == -1L) return@launch
+            val existing = nodes.value.find { it.nodeType == "transformer" }
+            if (existing != null) {
+                // اگر مختصات canvas قدیمی است، به geo آپدیت کن
+                if (existing.x !in 24f..41f) {
+                    val updated = existing.copy(x = lat.toFloat(), y = lon.toFloat())
+                    schematicDao.updateNode(updated)
+                    onReady(updated)
+                } else {
+                    onReady(existing)
+                }
+                return@launch
+            }
+            val nodeId = schematicDao.insertNode(
+                SchematicNode(
+                    transformerId = id,
+                    x = lat.toFloat(),
+                    y = lon.toFloat(),
+                    nodeType = "transformer",
+                    label = "ترانس"
+                )
+            )
+            val node = schematicDao.getNodeById(nodeId)
+            if (node != null) onReady(node)
+        }
+    }
+
     fun addNode(x: Float, y: Float, type: String, isThreePhase: Boolean) {
         viewModelScope.launch {
             val id = _transformerId.value
