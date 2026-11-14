@@ -103,6 +103,27 @@ class SchematicActivity : AppCompatActivity() {
         setupButtons()
         observeData()
         viewModel.load(transformerId)
+
+        // بارگذاری موقعیت ترانس از ثبت اولیه صفحه اول
+        loadTransformerLocation()
+    }
+
+    private fun loadTransformerLocation() {
+        lifecycleScope.launch {
+            val db = com.bazdid.trans.data.db.AppDatabase.getInstance(this@SchematicActivity)
+            val tr = db.transformerDao().getById(transformerId)
+            if (tr != null) {
+                viewModel.ensureTransformerNode(tr.latitude, tr.longitude) { node ->
+                    lastActiveNodeId = node.id
+                    // مرکز نقشه روی ترانس
+                    if (isMapVisible || binding.mapView.visibility == View.VISIBLE) {
+                        binding.mapView.controller.animateTo(GeoPoint(tr.latitude, tr.longitude))
+                        binding.mapView.controller.setZoom(18.0)
+                    }
+                    refreshMapOverlays()
+                }
+            }
+        }
     }
 
     private fun prepareOfflineTiles() {
@@ -340,6 +361,19 @@ class SchematicActivity : AppCompatActivity() {
                 .setNegativeButton(R.string.no, null)
                 .show()
         }
+
+        // دکمه موقعیت من
+        binding.btnMyLocation.setOnClickListener {
+            if (!isMapVisible) {
+                // اول نقشه را روشن کن
+                toggleMapOnSamePage()
+            }
+            enableMyLocation()
+            myLocationOverlay?.myLocation?.let {
+                binding.mapView.controller.animateTo(it)
+                binding.mapView.controller.setZoom(18.0)
+            } ?: Toast.makeText(this, "در حال دریافت موقعیت...", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun toggleMapOnSamePage() {
@@ -465,10 +499,10 @@ class SchematicActivity : AppCompatActivity() {
         lifecycleScope.launch {
             viewModel.nodes.collectLatest { nodes ->
                 binding.schematicView.setData(nodes, viewModel.connections.value)
+                // فقط اگر lastActiveNodeId هنوز ست نشده و ترانس وجود دارد، آن را به ترانس وصل کن
+                // (دیگر به آخرین پایه وصل نمی‌شود تا فیدر جدید از ترانس شروع شود)
                 if (lastActiveNodeId == null) {
-                    lastActiveNodeId = nodes.lastOrNull {
-                        it.nodeType == "pole" || it.nodeType == "transformer"
-                    }?.id
+                    lastActiveNodeId = nodes.find { it.nodeType == "transformer" }?.id
                 }
                 refreshMapOverlays()
             }
@@ -536,10 +570,11 @@ class SchematicActivity : AppCompatActivity() {
                 viewModel.updateNodePhases(node, single, three)
                 viewModel.zeroUnsetPhases()
                 feederMode = false
-                lastActiveNodeId = null
                 currentAddMode = SchematicView.Mode.NONE
                 binding.schematicView.setMode(SchematicView.Mode.NONE)
-                Toast.makeText(this, "فیدر تمام شد", Toast.LENGTH_SHORT).show()
+                // فیدر بعدی از خود ترانس شروع شود (نه از آخرین پایه)
+                lastActiveNodeId = viewModel.nodes.value.find { it.nodeType == "transformer" }?.id
+                Toast.makeText(this, "فیدر تمام شد — فیدر بعدی از ترانس شروع می‌شود", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("انصراف", null)
             .show()
