@@ -4,7 +4,11 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
 import android.text.InputType
 import android.view.View
@@ -104,6 +108,12 @@ class SchematicActivity : AppCompatActivity() {
         setupButtons()
         observeData()
         viewModel.load(transformerId)
+
+        // همیشه نقشه را از ابتدا نشان بده (یک صفحه واحد)
+        isMapVisible = true
+        binding.mapView.visibility = android.view.View.VISIBLE
+        binding.schematicView.visibility = android.view.View.GONE
+        binding.btnOfflineMap.text = "مخفی کردن نقشه"
 
         // بارگذاری موقعیت ترانس از ثبت اولیه صفحه اول
         loadTransformerLocation()
@@ -443,12 +453,12 @@ class SchematicActivity : AppCompatActivity() {
             }
         }
 
-        // نقاط
+        // نقاط با آیکون سفارشی
         nodes.forEach { node ->
             val geo = toGeoPoint(node) ?: return@forEach
             val marker = Marker(binding.mapView).apply {
                 position = geo
-                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                 title = when (node.nodeType) {
                     "transformer" -> "ترانس"
                     "output" -> if (node.isThreePhase) "خروجی ۳فاز" else "خروجی ۱فاز"
@@ -458,11 +468,10 @@ class SchematicActivity : AppCompatActivity() {
                         listOf(sp, tp).filter { it.isNotEmpty() }.joinToString(" ").ifEmpty { "پایه" }
                     }
                 }
-                // رنگ تقریبی
-                when (node.nodeType) {
-                    "transformer" -> icon = ContextCompat.getDrawable(this@SchematicActivity, android.R.drawable.ic_menu_compass)
-                    "output" -> { /* پیش‌فرض */ }
-                    else -> { /* پیش‌فرض */ }
+                icon = when (node.nodeType) {
+                    "transformer" -> createTransformerIcon()
+                    "output" -> createOutputIcon()
+                    else -> createPoleIcon()
                 }
                 relatedObject = node
                 setOnMarkerClickListener { m, _ ->
@@ -503,10 +512,11 @@ class SchematicActivity : AppCompatActivity() {
     private fun toGeoPoint(node: SchematicNode): GeoPoint? {
         val lat = node.x.toDouble()
         val lon = node.y.toDouble()
-        return if (lat in 24.0..41.0 && lon in 43.0..65.0) {
+        // محدوده ایران + حاشیه
+        return if (lat in 24.0..42.0 && lon in 43.0..65.0) {
             GeoPoint(lat, lon)
         } else {
-            null // مختصات canvas قدیمی
+            null // مختصات canvas قدیمی — روی نقشه نشان داده نمی‌شود
         }
     }
 
@@ -695,6 +705,50 @@ class SchematicActivity : AppCompatActivity() {
             if (groupNodes.isNotEmpty()) groups.add(groupNodes)
         }
         return groups.ifEmpty { listOf(nodes.filter { it.nodeType == "pole" }) }
+    }
+
+
+    private fun createPoleIcon(): android.graphics.drawable.BitmapDrawable {
+        val size = 48
+        val bmp = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(bmp)
+        val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#212121")
+            style = android.graphics.Paint.Style.FILL
+        }
+        c.drawCircle(size / 2f, size / 2f, size / 2f - 4f, p)
+        return android.graphics.drawable.BitmapDrawable(resources, bmp)
+    }
+
+    private fun createTransformerIcon(): android.graphics.drawable.BitmapDrawable {
+        val size = 64
+        val bmp = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(bmp)
+        val stroke = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#212121")
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = 5f
+        }
+        val fill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#212121")
+            style = android.graphics.Paint.Style.FILL
+        }
+        val pad = 6f
+        c.drawRect(pad, pad, size - pad, size - pad, stroke)
+        c.drawCircle(size / 2f, size / 2f, 14f, fill)
+        return android.graphics.drawable.BitmapDrawable(resources, bmp)
+    }
+
+    private fun createOutputIcon(): android.graphics.drawable.BitmapDrawable {
+        val size = 40
+        val bmp = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(bmp)
+        val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#F9A825")
+            style = android.graphics.Paint.Style.FILL
+        }
+        c.drawCircle(size / 2f, size / 2f, size / 2f - 3f, p)
+        return android.graphics.drawable.BitmapDrawable(resources, bmp)
     }
 
     override fun onResume() {
