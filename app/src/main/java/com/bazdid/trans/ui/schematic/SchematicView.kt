@@ -31,16 +31,16 @@ class SchematicView @JvmOverloads constructor(
 
     // رنگ‌های متفاوت برای فیدرها
     private val feederColors = intArrayOf(
-        Color.parseColor("#1565C0"),
-        Color.parseColor("#2E7D32"),
-        Color.parseColor("#E65100"),
-        Color.parseColor("#6A1B9A"),
-        Color.parseColor("#C62828"),
-        Color.parseColor("#00838F"),
-        Color.parseColor("#F9A825"),
-        Color.parseColor("#AD1457"),
-        Color.parseColor("#37474F"),
-        Color.parseColor("#558B2F")
+        Color.parseColor("#1565C0"), // آبی
+        Color.parseColor("#2E7D32"), // سبز
+        Color.parseColor("#E65100"), // نارنجی
+        Color.parseColor("#6A1B9A"), // بنفش
+        Color.parseColor("#C62828"), // قرمز
+        Color.parseColor("#00838F"), // فیروزه‌ای
+        Color.parseColor("#F9A825"), // زرد
+        Color.parseColor("#AD1457"), // صورتی تیره
+        Color.parseColor("#37474F"), // خاکستری
+        Color.parseColor("#558B2F")  // سبز روشن
     )
 
     private val polePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -81,6 +81,7 @@ class SchematicView @JvmOverloads constructor(
     private var mode: Mode = Mode.NONE
     private var connectFromId: Long? = null
 
+    /** نقشه nodeId -> شماره فیدر (برای رنگ‌بندی) */
     private var nodeFeederIndex = mapOf<Long, Int>()
 
     var onNodeAdded: ((Float, Float, String) -> Unit)? = null
@@ -88,7 +89,7 @@ class SchematicView @JvmOverloads constructor(
     var onNodesRepositioned: ((List<SchematicNode>) -> Unit)? = null
     var onNodeSelected: ((SchematicNode) -> Unit)? = null
 
-    /** وقتی true باشد، تاچ‌ها را به MapView پاس می‌دهد */
+    /** وقتی true باشد، تاچ‌ها را به MapView زیرین پاس می‌دهد */
     var passThroughTouches: Boolean = false
 
     enum class Mode { NONE, ADD_POLE, ADD_OUTPUT, CONNECT }
@@ -139,6 +140,9 @@ class SchematicView @JvmOverloads constructor(
         invalidate()
     }
 
+    /**
+     * از نود ترانس شروع می‌کند و هر شاخه مستقیم را یک فیدر جدا با رنگ جدا در نظر می‌گیرد.
+     */
     private fun computeFeederColors() {
         val adj = mutableMapOf<Long, MutableList<Long>>()
         connections.forEach { c ->
@@ -150,12 +154,13 @@ class SchematicView @JvmOverloads constructor(
         val result = mutableMapOf<Long, Int>()
 
         if (transformer == null) {
+            // بدون ترانس: همه یک رنگ
             nodes.forEach { result[it.id] = 0 }
             nodeFeederIndex = result
             return
         }
 
-        result[transformer.id] = -1
+        result[transformer.id] = -1 // ترانس رنگ ندارد
         val neighbors = adj[transformer.id].orEmpty()
         neighbors.forEachIndexed { feederIdx, startId ->
             val queue = ArrayDeque<Long>()
@@ -171,12 +176,14 @@ class SchematicView @JvmOverloads constructor(
                 }
             }
         }
+        // نودهای جدا
         nodes.forEach { n ->
             if (n.id !in result) result[n.id] = 0
         }
         nodeFeederIndex = result
     }
 
+    /** چیدمان خودکار مرتب برای جلوگیری از شلوغی */
     fun autoLayout() {
         if (nodes.isEmpty()) return
 
@@ -263,21 +270,15 @@ class SchematicView @JvmOverloads constructor(
                         onConnectionRequested?.invoke(connectFromId!!, tapped.id)
                         connectFromId = null
                         selectedNodeId = null
-                        mode = Mode.NONE
                         invalidate()
                     }
                 }
             }
             Mode.NONE -> {
                 val tapped = findNodeAt(x, y)
-                if (tapped != null) {
-                    selectedNodeId = tapped.id
-                    onNodeSelected?.invoke(tapped)
-                    invalidate()
-                } else {
-                    selectedNodeId = null
-                    invalidate()
-                }
+                selectedNodeId = tapped?.id
+                tapped?.let { onNodeSelected?.invoke(it) }
+                invalidate()
             }
         }
     }
@@ -288,6 +289,7 @@ class SchematicView @JvmOverloads constructor(
         canvas.translate(offsetX, offsetY)
         canvas.scale(scaleFactor, scaleFactor)
 
+        // خطوط با رنگ فیدر
         connections.forEach { conn ->
             val from = nodes.find { it.id == conn.fromNodeId }
             val to = nodes.find { it.id == conn.toNodeId }
@@ -304,26 +306,34 @@ class SchematicView @JvmOverloads constructor(
             }
         }
 
+        // نودها
         nodes.forEach { node ->
             when (node.nodeType) {
                 "transformer" -> {
-                    val w = 70f
-                    val h = 50f
-                    canvas.drawRect(node.x - w / 2, node.y - h / 2, node.x + w / 2, node.y + h / 2, transformerPaint)
-                    canvas.drawCircle(node.x, node.y, 22f, transformerStroke)
+                    // مربع توخالی + دایره تیره داخل
+                    val half = 36f
+                    val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = Color.parseColor("#212121")
+                        style = Paint.Style.STROKE
+                        strokeWidth = 5f
+                    }
+                    val fillCircle = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = Color.parseColor("#212121")
+                        style = Paint.Style.FILL
+                    }
+                    canvas.drawRect(node.x - half, node.y - half, node.x + half, node.y + half, strokePaint)
+                    canvas.drawCircle(node.x, node.y, 16f, fillCircle)
                 }
                 "output" -> {
                     canvas.drawCircle(node.x, node.y, 26f, outputPaint)
                 }
                 else -> {
-                    val fIdx = nodeFeederIndex[node.id] ?: 0
-                    if (fIdx >= 0) {
-                        polePaint.color = feederColors[fIdx % feederColors.size]
-                    } else {
-                        polePaint.color = Color.parseColor("#2E7D32")
+                    // پایه: دایره تیره
+                    val darkPole = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = Color.parseColor("#212121")
+                        style = Paint.Style.FILL
                     }
-                    canvas.drawCircle(node.x, node.y, 34f, polePaint)
-                    canvas.drawLine(node.x - 20f, node.y - 20f, node.x + 20f, node.y + 20f, transformerStroke)
+                    canvas.drawCircle(node.x, node.y, 28f, darkPole)
                 }
             }
             val radius = when (node.nodeType) {
@@ -353,6 +363,7 @@ class SchematicView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        // اگر در حالت عادی باشیم و passThrough فعال باشد → اجازه بده نقشه حرکت کند
         if (passThroughTouches && mode == Mode.NONE) {
             return false
         }
