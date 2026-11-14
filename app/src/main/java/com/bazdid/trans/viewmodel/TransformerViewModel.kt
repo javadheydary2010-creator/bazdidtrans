@@ -73,38 +73,53 @@ class TransformerViewModel(application: Application) : AndroidViewModel(applicat
      * اگر فیدری وجود نداشته باشد یکی می‌سازد، در غیر این صورت اولی را به‌روز می‌کند
      * و در صورت نیاز فیدرهای خالی اضافی را پاک نمی‌کند تا داده‌های دستی حفظ شوند.
      */
-    fun applySchematicTotals(single: Int, three: Int) {
+    /**
+     * اعمال نتایج کروکی به صورت جداگانه برای هر فیدر
+     * @param feederStats لیست جفت‌های (تک‌فاز، سه‌فاز) به ترتیب فیدر ۱، ۲، ...
+     */
+    fun applySchematicFeederStats(feederStats: List<Pair<Int, Int>>) {
         viewModelScope.launch {
             val id = _transformerId.value
             if (id == -1L) return@launch
-            val currentFeeders = feeders.value
-            if (currentFeeders.isEmpty()) {
-                db.feederDao().insert(
-                    Feeder(
-                        transformerId = id,
-                        name = "فیدر ۱ (از کروکی)",
-                        singlePhaseCount = single.coerceAtLeast(0),
-                        threePhaseCount = three.coerceAtLeast(0)
-                    )
-                )
-            } else {
-                // مجموع را روی اولین فیدر می‌گذاریم و بقیه را صفر می‌کنیم
-                // تا خلاصه بار با کروکی یکی شود
-                val first = currentFeeders.first()
-                db.feederDao().update(
-                    first.copy(
-                        name = if (first.name.contains("کروکی")) first.name else "${first.name} (کروکی)",
-                        singlePhaseCount = single.coerceAtLeast(0),
-                        threePhaseCount = three.coerceAtLeast(0)
-                    )
-                )
-                currentFeeders.drop(1).forEach { f ->
+            if (feederStats.isEmpty()) return@launch
+
+            val currentFeeders = feeders.value.toMutableList()
+
+            feederStats.forEachIndexed { index, (single, three) ->
+                if (index < currentFeeders.size) {
+                    val f = currentFeeders[index]
                     db.feederDao().update(
-                        f.copy(singlePhaseCount = 0, threePhaseCount = 0)
+                        f.copy(
+                            name = "فیدر ${index + 1} (کروکی)",
+                            singlePhaseCount = single.coerceAtLeast(0),
+                            threePhaseCount = three.coerceAtLeast(0)
+                        )
+                    )
+                } else {
+                    db.feederDao().insert(
+                        Feeder(
+                            transformerId = id,
+                            name = "فیدر ${index + 1} (کروکی)",
+                            singlePhaseCount = single.coerceAtLeast(0),
+                            threePhaseCount = three.coerceAtLeast(0)
+                        )
+                    )
+                }
+            }
+            // فیدرهای اضافی قبلی را صفر کن (نه حذف، تا دستی‌ها حفظ شوند)
+            if (currentFeeders.size > feederStats.size) {
+                currentFeeders.drop(feederStats.size).forEach { f ->
+                    db.feederDao().update(
+                        f.copy(singlePhaseCount = 0, threePhaseCount = 0, name = f.name.replace(" (کروکی)", ""))
                     )
                 }
             }
         }
+    }
+
+    fun applySchematicTotals(single: Int, three: Int) {
+        // سازگاری با نسخه قبلی: همه در یک فیدر
+        applySchematicFeederStats(listOf(single to three))
     }
 
     fun updateFeederCounts(feeder: Feeder, single: Int, three: Int) {
