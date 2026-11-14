@@ -26,7 +26,6 @@
         android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-        <!-- نقشه در پس‌زمینه همین صفحه -->
         <org.osmdroid.views.MapView
             android:id="@+id/mapView"
             android:layout_width="match_parent"
@@ -40,6 +39,20 @@
             android:background="@android:color/transparent" />
 
     </FrameLayout>
+
+    <!-- دکمه موقعیت من (شناور) -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/btnMyLocation"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginBottom="140dp"
+        android:layout_marginEnd="16dp"
+        android:contentDescription="موقعیت من"
+        android:src="@android:drawable/ic_menu_mylocation"
+        app:backgroundTint="@color/primary"
+        app:tint="@android:color/white"
+        app:fabSize="normal" />
 
     <LinearLayout
         android:layout_width="match_parent"
