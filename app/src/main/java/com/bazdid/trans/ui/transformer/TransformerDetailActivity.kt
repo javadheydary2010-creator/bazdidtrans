@@ -39,8 +39,24 @@ class TransformerDetailActivity : AppCompatActivity() {
             val totalThree = data?.getIntExtra(SchematicActivity.RESULT_THREE, 0) ?: 0
             val loadKw = data?.getFloatExtra(SchematicActivity.RESULT_KW, 0f) ?: 0f
 
-            // اعمال محاسبات فیدر و خلاصه بار
-            if (totalSingle > 0 || totalThree > 0) {
+            // اعمال محاسبات هر فیدر به صورت جداگانه
+            val statsStr = data?.getStringExtra(SchematicActivity.RESULT_FEEDER_STATS) ?: ""
+            if (statsStr.isNotEmpty()) {
+                val feederStats = statsStr.split(";")
+                    .mapNotNull { part ->
+                        val bits = part.split(",")
+                        if (bits.size == 2) {
+                            val s = bits[0].toIntOrNull() ?: 0
+                            val t = bits[1].toIntOrNull() ?: 0
+                            s to t
+                        } else null
+                    }
+                if (feederStats.isNotEmpty()) {
+                    viewModel.applySchematicFeederStats(feederStats)
+                } else if (totalSingle > 0 || totalThree > 0) {
+                    viewModel.applySchematicTotals(totalSingle, totalThree)
+                }
+            } else if (totalSingle > 0 || totalThree > 0) {
                 viewModel.applySchematicTotals(totalSingle, totalThree)
             }
 
