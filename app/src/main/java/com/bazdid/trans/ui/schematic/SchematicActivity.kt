@@ -53,6 +53,7 @@ class SchematicActivity : AppCompatActivity() {
         const val RESULT_SINGLE = "result_single"
         const val RESULT_THREE = "result_three"
         const val RESULT_KW = "result_kw"
+        const val RESULT_FEEDER_STATS = "result_feeder_stats"  // "s1,t1;s2,t2;..."
     }
 
     private lateinit var binding: ActivitySchematicBinding
@@ -115,12 +116,26 @@ class SchematicActivity : AppCompatActivity() {
             if (tr != null) {
                 viewModel.ensureTransformerNode(tr.latitude, tr.longitude) { node ->
                     lastActiveNodeId = node.id
-                    // مرکز نقشه روی ترانس
-                    if (isMapVisible || binding.mapView.visibility == View.VISIBLE) {
-                        binding.mapView.controller.animateTo(GeoPoint(tr.latitude, tr.longitude))
-                        binding.mapView.controller.setZoom(18.0)
+                    // نقشه را از ابتدا روشن کن و روی ترانس مرکز کن
+                    if (!isMapVisible) {
+                        isMapVisible = true
+                        binding.mapView.visibility = View.VISIBLE
+                        binding.schematicView.visibility = View.GONE
+                        binding.btnOfflineMap.text = "مخفی کردن نقشه"
                     }
+                    binding.mapView.controller.animateTo(GeoPoint(tr.latitude, tr.longitude))
+                    binding.mapView.controller.setZoom(18.0)
+                    enableMyLocation()
                     refreshMapOverlays()
+                }
+            } else {
+                // حتی بدون ترانس، نقشه را روشن کن
+                if (!isMapVisible) {
+                    isMapVisible = true
+                    binding.mapView.visibility = View.VISIBLE
+                    binding.schematicView.visibility = View.GONE
+                    binding.btnOfflineMap.text = "مخفی کردن نقشه"
+                    enableMyLocation()
                 }
             }
         }
@@ -586,6 +601,7 @@ class SchematicActivity : AppCompatActivity() {
         val connections = viewModel.connections.value
         val nodeMap = nodes.associateBy { it.id }
 
+        // محاسبه طول
         var totalMeters = 0.0
         connections.forEach { conn ->
             val from = nodeMap[conn.fromNodeId]
@@ -594,7 +610,6 @@ class SchematicActivity : AppCompatActivity() {
                 val fromGeo = toGeoPoint(from)
                 val toGeo = toGeoPoint(to)
                 if (fromGeo != null && toGeo != null) {
-                    // فاصله واقعی جغرافیایی (تقریبی)
                     totalMeters += fromGeo.distanceToAsDouble(toGeo)
                 } else {
                     val distUnits = hypot(to.x - from.x, to.y - from.y)
@@ -603,18 +618,33 @@ class SchematicActivity : AppCompatActivity() {
             }
         }
 
-        val poles = nodes.filter { it.nodeType == "pole" }
-        val totalSingle = poles.sumOf { it.singlePhaseCount }
-        val totalThree = poles.sumOf { it.threePhaseCount }
+        // گروه‌بندی پایه‌ها بر اساس فیدر (شاخه‌های متصل به ترانس)
+        val feederGroups = computeFeederGroups(nodes, connections)
+        val feederStats = feederGroups.map { groupNodes ->
+            val single = groupNodes.sumOf { it.singlePhaseCount }
+            val three = groupNodes.sumOf { it.threePhaseCount }
+            single to three
+        }
+
+        val totalSingle = feederStats.sumOf { it.first }
+        val totalThree = feederStats.sumOf { it.second }
         val loadKw = totalSingle * 6.0 + totalThree * 8.0
 
         val summary = buildString {
             appendLine("=== خلاصه کروکی شبکه فشار ضعیف ===")
-            appendLine("تعداد پایه: ${poles.size}")
+            appendLine("تعداد پایه: ${nodes.count { it.nodeType == "pole" }}")
+            appendLine("تعداد فیدر: ${feederStats.size}")
+            feederStats.forEachIndexed { i, (s, t) ->
+                val kw = s * 6.0 + t * 8.0
+                appendLine("فیدر ${i + 1}: تک‌فاز=$s | سه‌فاز=$t | بار=${"%.1f".format(kw)} kW")
+            }
             appendLine("تک‌فاز کل: $totalSingle | سه‌فاز کل: $totalThree")
             appendLine("بار تقریبی: ${"%.1f".format(loadKw)} kW")
             appendLine("طول کل شبکه: ${"%.1f".format(totalMeters)} متر")
         }
+
+        // فرمت: "s1,t1;s2,t2;..."
+        val statsStr = feederStats.joinToString(";") { "${it.first},${it.second}" }
 
         val data = Intent().apply {
             putExtra(RESULT_LENGTHS, summary)
@@ -622,10 +652,49 @@ class SchematicActivity : AppCompatActivity() {
             putExtra(RESULT_SINGLE, totalSingle)
             putExtra(RESULT_THREE, totalThree)
             putExtra(RESULT_KW, loadKw.toFloat())
+            putExtra(RESULT_FEEDER_STATS, statsStr)
         }
         setResult(Activity.RESULT_OK, data)
-        Toast.makeText(this, "محاسبه شد — طول کل: ${"%.0f".format(totalMeters)} متر", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "محاسبه شد — ${feederStats.size} فیدر | طول: ${"%.0f".format(totalMeters)} م", Toast.LENGTH_LONG).show()
         finish()
+    }
+
+    /** هر شاخه مستقیم از ترانس = یک فیدر */
+    private fun computeFeederGroups(
+        nodes: List<SchematicNode>,
+        connections: List<com.bazdid.trans.data.entity.SchematicConnection>
+    ): List<List<SchematicNode>> {
+        val adj = mutableMapOf<Long, MutableList<Long>>()
+        connections.forEach { c ->
+            adj.getOrPut(c.fromNodeId) { mutableListOf() }.add(c.toNodeId)
+            adj.getOrPut(c.toNodeId) { mutableListOf() }.add(c.fromNodeId)
+        }
+        val transformer = nodes.find { it.nodeType == "transformer" } ?: return listOf(nodes.filter { it.nodeType == "pole" })
+        val neighbors = adj[transformer.id].orEmpty()
+        if (neighbors.isEmpty()) return listOf(nodes.filter { it.nodeType == "pole" })
+
+        val groups = mutableListOf<List<SchematicNode>>()
+        val visited = mutableSetOf(transformer.id)
+        neighbors.forEach { startId ->
+            if (startId in visited) return@forEach
+            val groupIds = mutableListOf<Long>()
+            val queue = ArrayDeque<Long>()
+            queue.add(startId)
+            visited.add(startId)
+            while (queue.isNotEmpty()) {
+                val cur = queue.removeFirst()
+                groupIds.add(cur)
+                for (next in adj[cur].orEmpty()) {
+                    if (next !in visited) {
+                        visited.add(next)
+                        queue.add(next)
+                    }
+                }
+            }
+            val groupNodes = groupIds.mapNotNull { id -> nodes.find { it.id == id && it.nodeType == "pole" } }
+            if (groupNodes.isNotEmpty()) groups.add(groupNodes)
+        }
+        return groups.ifEmpty { listOf(nodes.filter { it.nodeType == "pole" }) }
     }
 
     override fun onResume() {
